@@ -1,6 +1,6 @@
 node_modules/
 npm-debug.log*
-
+depricated/
 # Local configuration and generated runtime data
 config.local.json
 logs/

@@ -11,7 +11,7 @@
         },
         "Fingerprints": {
             "db": {
-                "path": "/root/srv/Prismonian/ProxyStop-Server/fingerprint.json",
+                "path": "C:\\Path\\To\\Directory\\",
                 "reloadInterval": 60000
             },
             "Params": {
