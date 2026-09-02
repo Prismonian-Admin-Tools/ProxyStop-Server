@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Scrapped for the current customers. Sysadmins are worse at Linux than a LITERAL FUCKING CHILD!
+
 echo "----- ProxyStop Server Setup Wizard -----"
 echo "Please select an option:"
 echo "[1] Guided Installation (recommended)"

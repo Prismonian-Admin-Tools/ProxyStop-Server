@@ -4,7 +4,7 @@ const path = require('node:path');
 
 const host = process.env.HOST || '127.0.0.1';
 const port = Number(process.env.PORT) || 8000;
-const publicDirectory = path.join(__dirname, '..', 'public');
+const publicDirectory = path.join(__dirname, 'public');
 
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',

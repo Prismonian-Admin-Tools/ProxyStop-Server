@@ -1,0 +1,11 @@
+node_modules/
+npm-debug.log*
+
+# Local configuration and generated runtime data
+config.local.json
+logs/
+fingerprint.json
+
+# Editor and operating-system files
+.DS_Store
+.vscode/
