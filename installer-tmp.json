@@ -1,0 +1,24 @@
+{
+    "meta": {
+        "OS": "DoohickeyOS"
+    },
+    "InstallerParamaters": {
+        "InstallDirectory": "/root/srv/Prismonian/ProxyStop-Server"
+    },
+    "hostSettings": {
+        "port": 8000,
+        "host": "0.0.0.0"
+    },
+    "paramaters": {
+        "fingerprintPath": "/root/srv/Prismonian/ProxyStop-Server/fingerprint.json",
+        "logPath": "/root/srv/Prismonian/ProxyStop-Server/logs",
+        "managementServer": {
+            "enabled": false,
+            "host": "0.0.0.0",
+            "port": 8001,
+            "logon": {
+                "type": "local"
+            }
+        }
+    }
+}

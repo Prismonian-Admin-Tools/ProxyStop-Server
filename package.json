@@ -1,0 +1,20 @@
+{
+  "name": "proxystop-server",
+  "version": "1.0.0",
+  "description": "A serverside application that holds, manages, and configures a database of website fingerprints to stop proxies from loading properly.",
+  "homepage": "https://github.com/Prismonian-Admin-Tools/ProxyStop-Server#readme",
+  "bugs": {
+    "url": "https://github.com/Prismonian-Admin-Tools/ProxyStop-Server/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Prismonian-Admin-Tools/ProxyStop-Server.git"
+  },
+  "license": "MIT",
+  "author": "Adrian LeDeaux",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
