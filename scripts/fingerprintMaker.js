@@ -5,12 +5,17 @@ const args = process.argv.slice(2);
 const configPath = path.join(__dirname, '..', 'config.json');
 const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
-if (args.length < 1) {
+if (args.length < 2) {
   console.error('Usage: node fingerprintMaker.js <website URL To Clone> <fingerprint name>');
   process.exit(1);
 }
 
-const outputDirectory = path.resolve(__dirname, '..', config.app.Fingerprints.db.foldername, '..', args[1]);
+if (args[1] === '.' || args[1] === '..' || path.basename(args[1]) !== args[1]) {
+  console.error('Fingerprint name must be a single directory name');
+  process.exit(1);
+}
+
+const outputDirectory = path.resolve(__dirname, '..', config.app.Fingerprints.db.foldername, args[1]);
 
 async function removeNonJavaScriptFiles(directory) {
   const entries = await fs.promises.readdir(directory, { withFileTypes: true });
@@ -41,12 +46,18 @@ async function removeNonJavaScriptFiles(directory) {
 async function main() {
   const { default: scrape } = await import('website-scraper');
 
+  await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+
   await scrape({
     urls: [args[0]],
     directory: outputDirectory,
     sources: [{ selector: 'script', attr: 'src' }],
-    recursive: config.app.Scraper.recursive,
-    maxRecursiveDepth: config.app.Scraper.maxDepth,
+    recursive: false,
+    request: {
+      timeout: {
+        request: 15000
+      }
+    },
     requestConcurrency: 5
   });
 

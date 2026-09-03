@@ -1,0 +1,19 @@
+{
+    "groups": {
+        "Internal": [
+            ["svue.psdschools.org"],
+            ["fch.psdschools.org"],
+            ["psdschools.org"],
+            
+            ["cn1759624440-vnsg12619.ibosscloud.com/"],
+        ],
+        "ThirdPartyTools": [
+            ["google.com"],
+            ["classroom.google.com"],
+            ["docs.google.com"],
+            ["drive.google.com"],
+            ["clever.com"],
+
+        ]
+    }
+}
