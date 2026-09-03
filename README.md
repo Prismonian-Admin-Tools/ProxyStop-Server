@@ -5,3 +5,4 @@ ProxyStop is a tool for network administrators of primarily schools to stop stud
 ## Fingerprints:
 
 ProxyStop fingerprints generic proxy websites.
+

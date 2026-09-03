@@ -7,6 +7,7 @@ const port = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'ut
 const publicDirectory = path.join(__dirname, 'public');
 
 
+// Request format: proxystop.example.com/api/student?website=example.com?group=groupname
 
 /*
 const host = process.env.HOST || '127.0.0.1';
@@ -46,10 +47,35 @@ function serveFile(requestPath, response) {
 const server = http.createServer((request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || host}`);
 
-  if (request.method !== 'GET' && request.method !== 'HEAD') {
+  if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== "OPTIONS") {
     send(response, 405, 'Method not allowed');
     return;
   }
+
+  if (request.method === 'OPTIONS') {
+    response.writeHead(200, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    });
+    response.end();
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname.startsWith('/api/')) {
+    const apiPath = requestUrl.pathname.slice(5); // Remove '/api/' prefix
+    const queryParams = Object.fromEntries(requestUrl.searchParams.entries());
+
+
+  }
+
+  if (request.method === 'GET' && !requestUrl.pathname.startsWith('/api/') && json.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).app.managementServer.enabled) {
+    send(response, 202, 'Management server is being created.');
+    // TODO: Implement management server functionality here
+  } else {
+    send(response, 403, 'Management server is disabled. Please contact your system administrators if you belive this is a mistake.');
+  }
+
 
   if (requestUrl.pathname === '/health') {
     send(response, 200, 'ok');
