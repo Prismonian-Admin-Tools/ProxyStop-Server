@@ -4,15 +4,12 @@
         "host": "0.0.0.0"
     },
     "app": {
-        "managementServer": {
-            "enabled": false,
-            "host": "0.0.0.0",
-            "port": 8001
-        },
         "Fingerprints": {
             "db": {
                 "path": "C:\\Path\\To\\Directory\\",
-                "reloadInterval": 60000
+                "foldername": "fingerprints",
+                "reloadInterval": 60000,
+                "minimumConfidence": 70
             },
             "Params": {
                 "fingerprint-method": "scripts"

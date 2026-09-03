@@ -2,10 +2,16 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const host = process.env.HOST || '127.0.0.1';
-const port = Number(process.env.PORT) || 8000;
+const host = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).host;
+const port = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).port;
 const publicDirectory = path.join(__dirname, 'public');
 
+
+
+/*
+const host = process.env.HOST || '127.0.0.1';
+const port = Number(process.env.PORT) || 8000;
+*/
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
