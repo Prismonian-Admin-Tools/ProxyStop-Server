@@ -6,7 +6,7 @@ const host = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'ut
 const port = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).port;
 const publicDirectory = path.join(__dirname, 'public');
 
-
+// Below comment demonstrates the request format. Hope this helps :D
 // Request format: proxystop.example.com/api/student?website=example.com?group=groupname
 
 /*
@@ -75,7 +75,6 @@ const server = http.createServer((request, response) => {
   } else {
     send(response, 403, 'Management server is disabled. Please contact your system administrators if you belive this is a mistake.');
   }
-
 
   if (requestUrl.pathname === '/health') {
     send(response, 200, 'ok');

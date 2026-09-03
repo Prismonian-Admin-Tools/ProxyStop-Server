@@ -17,5 +17,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "website-scraper": "^6.0.0"
   }
 }
