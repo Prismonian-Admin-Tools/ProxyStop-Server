@@ -4,8 +4,8 @@
             ["svue.psdschools.org"],
             ["fch.psdschools.org"],
             ["psdschools.org"],
-            
-            ["cn1759624440-vnsg12619.ibosscloud.com/"],
+            ["pvue.psdschools.org"],
+            ["cn1759624440-vnsg12619.ibosscloud.com"]
         ],
         "ThirdPartyTools": [
             ["google.com"],
@@ -13,7 +13,8 @@
             ["docs.google.com"],
             ["drive.google.com"],
             ["clever.com"],
-
+            ["outlook.cloud.microsoft"],
+            ["sites.google.com"],
         ]
     }
 }
