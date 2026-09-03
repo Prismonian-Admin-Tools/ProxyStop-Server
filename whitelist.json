@@ -4,17 +4,49 @@
             ["svue.psdschools.org"],
             ["fch.psdschools.org"],
             ["psdschools.org"],
-            ["pvue.psdschools.org"],
-            ["cn1759624440-vnsg12619.ibosscloud.com"]
+            ["cn1759624440-vnsg12619.ibosscloud.com"],
+            ["api.prismonian.com"],
+            ["cdn.prismonian.com"]
         ],
         "ThirdPartyTools": [
             ["google.com"],
             ["classroom.google.com"],
             ["docs.google.com"],
             ["drive.google.com"],
-            ["clever.com"],
             ["outlook.cloud.microsoft"],
             ["sites.google.com"],
+            ["adobe.com"],
+            ["canva.com"]
+        ],
+        "StudentTesting": [
+            ["certiport.com"],
+            ["nwea.org"],
+            ["nwea.force.com"],
+            ["pearson.com"],
+            ["pearsonaccessnext.com"],
+            ["pearsonassessments.com"],
+            ["pearsonclinical.com"],
+            ["pearsonschool.com"],
+            ["pearsonvue.com"],
+            ["mobymax.com"],
+            ["pearsonaccessnext.com"],
+            ["pearsonassessments.com"],
+            ["pearsonclinical.com"],
+            ["pearsonschool.com"],
+            ["pearsonvue.com"]
+        ],
+        "IdentityAccessManager": [
+            ["clever.com"],
+            ["accounts.google.com"],
+            ["login.microsoftonline.com"],
+            ["login.live.com"],
+            ["login.windows.net"],
+            ["login.microsoft.com"]
+        ],
+        "localsystem": [
+            ["localhost"],
+            ["127.0.0.1"],
+            ["::1"]
         ]
     }
 }
