@@ -10,3 +10,4 @@ todo
 # Editor and operating-system files
 .DS_Store
 .vscode/
+.vs/

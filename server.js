@@ -2,6 +2,8 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const proc = require('./scripts/processor.js');
+
 const host = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).host;
 const port = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).port;
 const publicDirectory = path.join(__dirname, 'public');

@@ -14,30 +14,47 @@ echo "Checking for required dependencies..."
 set dependencyCount=0
 
 where npm >nul 2>&1
-if %errorlevel% neq 0 (
-    echo "Error: Node.js and npm are required to run this installer."
+if %errorlevel% neq 0 goto installDepend
+
+echo "Node.js and npm are installed."
+set /a dependencyCount+=1
+goto InstallApp
+
+:installDepend
+echo "Error: Node.js and npm are required to run this installer."
+echo "Would you like to install Node.js and npm?"
+set /p dependInstallOption="[Y/N]: "
+if /I not "%dependInstallOption%"=="Y" (
+    echo "Cannot continue without Node.js. Exiting."
     exit /b 1
 )
-if %errorlevel% equ 0 (
-    echo "Node.js and npm are installed."
-    set /a dependencyCount+=1
+
+echo "Installing Node.js LTS via winget..."
+winget install OpenJS.NodeJS.LTS
+if %errorlevel% neq 0 (
+    echo "Error: winget installation failed."
+    exit /b 1
 )
 
+echo "Node.js LTS installed successfully."
+echo "NOTE: npm may not be available in this session yet."
+echo "Please close this window, open a new terminal, and re-run installer.cmd."
+pause
+exit /b 0
 
-if %option%==1(
+:InstallApp
+if "%option%"=="1" (
     echo "Starting guided install..."
     :: Code for the guided install goes here.
-) else if %option%==2 (
-    where installer.json >nul 2>&1
-    if %errorlevel% neq 0 (
+) else if "%option%"=="2" (
+    if not exist installer.json (
         echo "Error: installer.json file not found."
         echo "Is it in the same directory as installer.cmd?"
         exit /b 1
     )
     :: Code for the installer.json code
     echo "Parsing installer.json file..."
-
-) else if %option%==3 (
+) else if "%option%"=="3" (
     echo "Exiting the installer."
     exit /b 0
 ) else (
@@ -47,10 +64,6 @@ if %option%==1(
 
 echo "Installing ProxyStop Server..."
 
-
-:: Add additional dependency checks here.
-
-
-
 mkdir fingerprints
 npm install
+exit /b 0

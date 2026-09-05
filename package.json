@@ -20,5 +20,8 @@
   },
   "dependencies": {
     "website-scraper": "^6.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^10.10.0"
   }
 }
