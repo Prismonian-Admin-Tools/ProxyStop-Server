@@ -5,10 +5,12 @@ const args = process.argv.slice(2);
 const configPath = path.join(__dirname, '..', 'config.json');
 const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
+const debugReturnValue = 1
+
 if (args.length < 1) {
   console.error('Usage: node processor.js <URL>');
 };
 
 function comparison(url) {
-
+    return false;
 };

@@ -68,7 +68,7 @@ const server = http.createServer((request, response) => {
     const apiPath = requestUrl.pathname.slice(5); // Remove '/api/' prefix
     const queryParams = Object.fromEntries(requestUrl.searchParams.entries());
 
-    
+      proc.comparison(queryParams.url);
   }
 
   if (request.method === 'GET' && !requestUrl.pathname.startsWith('/api/') && json.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).app.managementServer.enabled) {
