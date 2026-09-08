@@ -1,0 +1,4 @@
+Hello, {adminName}
+Below is a list of suspicious websites that were flagged by ProxyStop.
+Please review the following websites and add them to the blocklist if neccesary.
+cdn.example.com/ProxyStop/reports.txt

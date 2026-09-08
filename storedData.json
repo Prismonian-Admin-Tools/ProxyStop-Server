@@ -1,0 +1,8 @@
+{
+    "schedules": {
+        "websiteReport": {
+            "lastReportSent": "mm/dd/yyyy hh:mm:ss",
+            "taskRate": "weekly"
+        }
+    }
+}

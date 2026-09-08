@@ -13,6 +13,11 @@
             },
             "Params": {
                 "fingerprint-method": "scripts"
+            },
+            "ReportsParams": {
+                "blankContents": "Website Reports List\n---------------------------------",
+                "entryFormat": "\n{url}",
+                "reportExpiry": true
             }
         },
         "Scraper": {

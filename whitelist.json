@@ -33,7 +33,9 @@
             ["pearsonassessments.com"],
             ["pearsonclinical.com"],
             ["pearsonschool.com"],
-            ["pearsonvue.com"]
+            ["pearsonvue.com"],
+            ["bluebook.pearsonvue.com"],
+            ["mobymax.com"]
         ],
         "IdentityAccessManager": [
             ["clever.com"],
