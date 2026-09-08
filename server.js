@@ -68,10 +68,15 @@ const server = http.createServer((request, response) => {
     const apiPath = requestUrl.pathname.slice(5); // Remove '/api/' prefix
     const queryParams = Object.fromEntries(requestUrl.searchParams.entries());
 
-      proc.comparison(queryParams.url);
+    let comparison = proc.comparison(queryParams.url);
+    if (comparison == true){
+      fs.appendFile('.\\reports.txt', queryParams.url, 'utf8');
+      send(response, 200, 'true');
+    } else {
+      send(response, 200, 'false');
+    }
     // Curently adds all websites to reports.txt
     // Assuming the server will return true, the server will add the URL paramater to the list.
-    fs.appendFile('.\\reports.txt', queryParams.url, 'utf8');
     
   }
 

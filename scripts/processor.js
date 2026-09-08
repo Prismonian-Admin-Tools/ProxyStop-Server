@@ -12,5 +12,5 @@ if (args.length < 1) {
 };
 
 function comparison(url) {
-    return false;
+    return true;
 };

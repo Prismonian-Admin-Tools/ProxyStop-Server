@@ -10,8 +10,5 @@ todo
 # Editor and operating-system files
 .DS_Store
 .vscode/
-<<<<<<< HEAD
 .vs/
-=======
 .env
->>>>>>> b2b309a (Did some work on scheules.js, and added .env to the gitignore.)
