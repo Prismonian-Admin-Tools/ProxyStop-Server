@@ -19,15 +19,28 @@ const mailScheduleJob = schedule.scheduleJob(rule, function runMailingSchedule()
         secure: false,             // true for 465, false for other ports
         auth: {
         user: 'noreply@prismonian.com', // Your email address
-        pass: '',   // Your email or app-specific password
+        pass: 'StupidComputer3#',   // Your email or app-specific password
         },
     });
-
     let now = new(date);
     const filepath = null;
     fs.copyFile(rootPath + '\\reports.txt', 'reports-' + now);
-
     now = null;
+    const mailOptions = {
+        from: '"Prismonian Software API" <noreplyl@prismonian.com>', // Sender address
+        to: 'recipient@example.com',                           // List of receivers (separated by commas)
+        subject: 'Weekly Suspicious Website Report',            // Subject line
+        text: 'Hello, John. \n This is an email.',   // Plain text body
+        html: '<h1>Hello!</h1><p>This is an <b>HTML</b> automated email.</p>' // HTML body
+    };
+    
+    transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+        return console.log('Error occurred:', error);
+    }
+        console.log('Email sent successfully!');
+        console.log('Message ID:', info.messageId);
+    });
 });
 
 async function checkUpdate() {
