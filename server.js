@@ -67,15 +67,12 @@ const server = http.createServer((request, response) => {
   if (request.method === 'GET' && requestUrl.pathname.startsWith('/api/')) {
     const apiPath = requestUrl.pathname.slice(5); // Remove '/api/' prefix
     const queryParams = Object.fromEntries(requestUrl.searchParams.entries());
-<<<<<<< HEAD
 
       proc.comparison(queryParams.url);
-=======
     // Curently adds all websites to reports.txt
     // Assuming the server will return true, the server will add the URL paramater to the list.
     fs.appendFile('.\\reports.txt', queryParams.url, 'utf8');
     
->>>>>>> b2b309a (Did some work on scheules.js, and added .env to the gitignore.)
   }
 
   if (request.method === 'GET' && !requestUrl.pathname.startsWith('/api/') && json.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).app.managementServer.enabled) {
