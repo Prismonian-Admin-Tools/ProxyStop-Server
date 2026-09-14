@@ -24,6 +24,9 @@
             "recursive": true,
             "maxDepth": 3,
             "maxPages": 100
+        },
+        "managementServer": {
+            "enabled": true
         }
     }
 }

@@ -1,21 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const args = process.argv.slice(2);
 
 const configPath = path.join(__dirname, '..', 'config.json');
-const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
-if (args.length < 2) {
-  console.error('Usage: node fingerprintMaker.js <website URL To Clone> <fingerprint name>');
-  process.exit(1);
+function fingerprintsDirectory() {
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  return path.resolve(__dirname, '..', config.app?.Fingerprints?.db?.foldername || 'fingerprints');
 }
-
-if (args[1] === '.' || args[1] === '..' || path.basename(args[1]) !== args[1]) {
-  console.error('Fingerprint name must be a single directory name');
-  process.exit(1);
-}
-
-const outputDirectory = path.resolve(__dirname, '..', config.app.Fingerprints.db.foldername, args[1]);
 
 async function removeNonJavaScriptFiles(directory) {
   const entries = await fs.promises.readdir(directory, { withFileTypes: true });
@@ -43,13 +34,27 @@ async function removeNonJavaScriptFiles(directory) {
   return javascriptFileCount;
 }
 
-async function main() {
+/**
+ * Scrapes `url`, keeps only the .js files it finds, and stores them under
+ * the configured fingerprints folder as a new fingerprint named `name`.
+ * Shared by the CLI below and the management server's "new fingerprint"
+ * action.
+ */
+async function createFingerprint(url, name) {
+  if (!url) {
+    throw new Error('A source URL is required.');
+  }
+  if (!name || name === '.' || name === '..' || path.basename(name) !== name) {
+    throw new Error('Fingerprint name must be a single directory name.');
+  }
+
+  const outputDirectory = path.resolve(fingerprintsDirectory(), name);
   const { default: scrape } = await import('website-scraper');
 
   await fs.promises.rm(outputDirectory, { recursive: true, force: true });
 
   await scrape({
-    urls: [args[0]],
+    urls: [url],
     directory: outputDirectory,
     sources: [{ selector: 'script', attr: 'src' }],
     recursive: false,
@@ -63,14 +68,29 @@ async function main() {
 
   const javascriptFileCount = await removeNonJavaScriptFiles(outputDirectory);
   if (javascriptFileCount === 0) {
-    throw new Error('The website does not contain any .js files');
+    await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+    throw new Error('The website does not contain any .js files.');
   }
 
-  console.log(`Saved ${javascriptFileCount} JavaScript file(s) from ${args[0]}`);
+  return { name, fileCount: javascriptFileCount };
 }
 
-main().catch((error) => {
-  console.error(`Error creating fingerprint: ${error.message}`);
-  process.exitCode = 1;
-});
+async function main() {
+  const args = process.argv.slice(2);
+  if (args.length < 2) {
+    console.error('Usage: node fingerprintMaker.js <website URL To Clone> <fingerprint name>');
+    process.exit(1);
+  }
 
+  const result = await createFingerprint(args[0], args[1]);
+  console.log(`Saved ${result.fileCount} JavaScript file(s) from ${args[0]}`);
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`Error creating fingerprint: ${error.message}`);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { createFingerprint };

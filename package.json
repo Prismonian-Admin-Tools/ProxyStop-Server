@@ -20,6 +20,8 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
     "node-schedule": "^2.1.1",
     "nodemailer": "^10.0.1",
     "website-scraper": "^6.0.0"

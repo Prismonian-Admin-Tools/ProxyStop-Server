@@ -1,106 +1,69 @@
-const http = require('node:http');
-const fs = require('node:fs');
+require('dotenv').config();
+const express = require('express');
+const session = require('express-session');
 const path = require('node:path');
+const fs = require('node:fs');
 
 const proc = require('./scripts/processor.js');
+const configStore = require('./management/stores/configStore');
+const { managementRouter } = require('./management/router');
 
-const host = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).host;
-const port = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).port;
 const publicDirectory = path.join(__dirname, 'public');
+const reportsPath = path.join(__dirname, 'reports.txt');
+
+const app = express();
+
+app.use((req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
+app.get('/health', (req, res) => res.send('ok'));
 
 // Below comment demonstrates the request format. Hope this helps :D
 // Request format: proxystop.example.com/api/student?website=example.com?group=groupname
+app.get('/api/*', async (req, res) => {
+  const requestedUrl = req.query.url;
+  const isMatch = await proc.comparison(requestedUrl);
 
-/*
-const host = process.env.HOST || '127.0.0.1';
-const port = Number(process.env.PORT) || 8000;
-*/
-const contentTypes = {
-  '.css': 'text/css; charset=utf-8',
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8'
-};
-
-function send(response, status, body, contentType = 'text/plain; charset=utf-8') {
-  response.writeHead(status, { 'Content-Type': contentType });
-  response.end(body);
-}
-
-function serveFile(requestPath, response) {
-  const requestedPath = requestPath === '/' ? '/index.html' : requestPath;
-  const filePath = path.resolve(publicDirectory, `.${requestedPath}`);
-
-  if (!filePath.startsWith(`${publicDirectory}${path.sep}`)) {
-    send(response, 404, 'Not found');
-    return;
-  }
-
-  fs.readFile(filePath, (error, file) => {
-    if (error) {
-      send(response, error.code === 'ENOENT' ? 404 : 500, error.code === 'ENOENT' ? 'Not found' : 'Server error');
-      return;
-    }
-
-    const extension = path.extname(filePath);
-    send(response, 200, file, contentTypes[extension] || 'application/octet-stream');
-  });
-}
-
-const server = http.createServer((request, response) => {
-  const requestUrl = new URL(request.url, `http://${request.headers.host || host}`);
-
-  if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== "OPTIONS") {
-    send(response, 405, 'Method not allowed');
-    return;
-  }
-
-  if (request.method === 'OPTIONS') {
-    response.writeHead(200, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    });
-    response.end();
-    return;
-  }
-
-  if (request.method === 'GET' && requestUrl.pathname.startsWith('/api/')) {
-    const apiPath = requestUrl.pathname.slice(5); // Remove '/api/' prefix
-    const queryParams = Object.fromEntries(requestUrl.searchParams.entries());
-
-    let comparison = proc.comparison(queryParams.url);
-    if (comparison == true){
-      fs.appendFile('.\\reports.txt', queryParams.url, 'utf8');
-      send(response, 200, 'true');
-    } else {
-      send(response, 200, 'false');
-    }
+  if (isMatch) {
+    const config = configStore.get();
+    const entryFormat = config.app?.Fingerprints?.ReportsParams?.entryFormat || '\n{url}';
+    await fs.promises.appendFile(reportsPath, entryFormat.replace('{url}', requestedUrl), 'utf8');
     // Curently adds all websites to reports.txt
     // Assuming the server will return true, the server will add the URL paramater to the list.
-    
+    return res.type('text/plain').send('true');
   }
 
-  if (request.method === 'GET' && !requestUrl.pathname.startsWith('/api/') && json.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).app.managementServer.enabled) {
-    send(response, 202, 'Management server is being created.');
-    // TODO: Implement management server functionality here
-  } else {
-    send(response, 403, 'Management server is disabled. Please contact your system administrators if you belive this is a mistake.');
-  }
-
-  if (requestUrl.pathname === '/health') {
-    send(response, 200, 'ok');
-    return;
-  }
-
-  if (request.method === 'HEAD') {
-    response.writeHead(200);
-    response.end();
-    return;
-  }
-
-  serveFile(requestUrl.pathname, response);
+  res.type('text/plain').send('false');
 });
 
-server.listen(port, host, () => {
+app.use('/manage', (req, res, next) => {
+  if (!configStore.get().app?.managementServer?.enabled) {
+    return res.status(403).send('Management server is disabled. Please contact your system administrators if you believe this is a mistake.');
+  }
+  next();
+});
+app.use(
+  '/manage',
+  session({
+    secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
+    name: 'proxystop.manage.sid',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 12, secure: 'auto' },
+  })
+);
+app.use('/manage/api', managementRouter());
+app.use('/manage', express.static(path.join(__dirname, 'management', 'public')));
+app.get('/manage*', (req, res) => res.sendFile(path.join(__dirname, 'management', 'public', 'index.html')));
+
+app.use(express.static(publicDirectory));
+
+const { host, port } = configStore.get().Host;
+app.listen(port, host, () => {
   console.log(`Application listening at http://${host}:${port}`);
 });
