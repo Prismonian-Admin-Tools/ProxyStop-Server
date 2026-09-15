@@ -326,7 +326,7 @@ function render() {
   const app = document.getElementById('app');
   app.innerHTML = '';
 
-  const tabs = [['dashboard', 'Dashboard', 'dashboard'], ['groups', 'Groups', 'groups'], ['fingerprints', 'Fingerprints', 'fingerprints']];
+  const tabs = [['dashboard', 'Dashboard', 'dashboard'], ['fingerprints', 'Fingerprints', 'fingerprints']];
   if (state.canManage) tabs.push(['config', 'Configuration', 'settings']);
 
   const navEl = el('nav', {}, [
@@ -353,7 +353,6 @@ function render() {
   app.appendChild(el('div', {}, [header, el('main', {}, [navEl, content])]));
 
   if (state.view === 'dashboard') renderDashboard(content);
-  if (state.view === 'groups') renderGroups(content);
   if (state.view === 'fingerprints') renderFingerprints(content);
   if (state.view === 'config') renderConfig(content);
 }
