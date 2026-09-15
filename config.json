@@ -26,7 +26,7 @@
             "maxPages": 100
         },
         "managementServer": {
-            "enabled": false
+            "enabled": true
         }
     }
 }
