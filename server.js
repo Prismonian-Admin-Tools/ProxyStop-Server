@@ -4,8 +4,9 @@ const path = require('node:path');
 
 const proc = require('./scripts/processor.js');
 
-const host = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).host;
-const port = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).port;
+const startupConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
+const host = startupConfig.Host.host;
+const port = startupConfig.Host.port;
 const publicDirectory = path.join(__dirname, 'public');
 
 // Below comment demonstrates the request format. Hope this helps :D
@@ -46,7 +47,9 @@ function serveFile(requestPath, response) {
   });
 }
 
-const server = http.createServer((request, response) => {
+const reportsPath = path.join(__dirname, 'reports.txt');
+
+const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host || host}`);
 
   if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== "OPTIONS") {
@@ -64,41 +67,34 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  if (request.method === 'GET' && requestUrl.pathname.startsWith('/api/')) {
-    const apiPath = requestUrl.pathname.slice(5); // Remove '/api/' prefix
-    const queryParams = Object.fromEntries(requestUrl.searchParams.entries());
-
-    let comparison = proc.comparison(queryParams.url);
-    if (comparison == true){
-      fs.appendFile('.\\reports.txt', queryParams.url, 'utf8');
-      send(response, 200, 'true');
-    } else {
-      send(response, 200, 'false');
-    }
-    // Curently adds all websites to reports.txt
-    // Assuming the server will return true, the server will add the URL paramater to the list.
-    
-  }
-
-  if (request.method === 'GET' && !requestUrl.pathname.startsWith('/api/') && json.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8')).app.managementServer.enabled) {
-    send(response, 202, 'Management server is being created.');
-    // TODO: Implement management server functionality here
-  } else {
-    send(response, 403, 'Management server is disabled. Please contact your system administrators if you belive this is a mistake.');
-  }
-
   if (requestUrl.pathname === '/health') {
     send(response, 200, 'ok');
     return;
   }
 
-  if (request.method === 'HEAD') {
-    response.writeHead(200);
-    response.end();
+  if (request.method === 'GET' && requestUrl.pathname.startsWith('/api/')) {
+    const queryParams = Object.fromEntries(requestUrl.searchParams.entries());
+
+    const blocked = await proc.comparison(queryParams.url);
+    if (blocked) {
+      // Assuming the server will return true, the server will add the URL parameter to the list.
+      try {
+        await fs.promises.appendFile(reportsPath, `${queryParams.url}\n`, 'utf8');
+      } catch (error) {
+        console.error(`Failed to record report for ${queryParams.url}: ${error.message}`);
+      }
+    }
+    send(response, 200, blocked ? 'true' : 'false');
     return;
   }
 
-  serveFile(requestUrl.pathname, response);
+  const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
+  if (config.app?.managementServer?.enabled) {
+    send(response, 202, 'Management server is being created.');
+    // TODO: Implement management server functionality here
+  } else {
+    send(response, 403, 'Management server is disabled. Please contact your system administrators if you believe this is a mistake.');
+  }
 });
 
 server.listen(port, host, () => {

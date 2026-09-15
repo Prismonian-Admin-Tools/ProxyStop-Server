@@ -66,8 +66,5 @@ echo "Installing ProxyStop Server..."
 
 mkdir fingerprints
 npm install
-<<<<<<< HEAD
-exit /b 0
-=======
 echo "Website report list" > reports.txt
->>>>>>> b2b309a (Did some work on scheules.js, and added .env to the gitignore.)
+exit /b 0
