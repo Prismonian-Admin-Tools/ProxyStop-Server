@@ -36,3 +36,24 @@ except Configuration.
 Set `app.managementServer.enabled` to `false` in `config.json` to take the
 console offline entirely (`/manage` then responds `403` to everyone).
 
+### Client groups
+
+The groups managed on the Groups page classify ProxyStop's actual
+clients — the students, staff, and admins on the network — not arbitrary
+domain categories. `whitelist.json` ships with six default groups:
+
+| Group | Who | Intended behavior |
+|---|---|---|
+| `Sysadmin` | District system administrators, usually with backend access | Highest rank — no other group's settings can override a Sysadmin's |
+| `ElevatedStaff` | IT workers | Can sign into the management console and manage groups |
+| `StaffUsers` | Teachers | Behaves like `StudentUsers`, but a `Sysadmin` can modify its settings |
+| `StudentUsers` | The default group for newly enrolled students | Some sites can be unblocked |
+| `HighschoolStudent` | Students at schools that grant more freedom | Some sites can be unblocked |
+| `EduOnly` | Special placement, assigned by `ElevatedStaff` | Every fingerprinted site stays blocked |
+
+None of this is enforced yet — the six groups exist as defaults, but
+nothing currently ties group membership to fingerprint blocking or to who
+can sign into `/manage` (that's still governed entirely by GUS's
+owner/admin/moderator roles, per above). This table records the intended
+design for when that wiring is built.
+
