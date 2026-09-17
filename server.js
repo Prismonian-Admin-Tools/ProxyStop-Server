@@ -6,6 +6,7 @@ const fs = require('node:fs');
 
 const proc = require('./scripts/processor.js');
 const configStore = require('./management/stores/configStore');
+const blocklistStore = require('./management/stores/blocklistStore');
 const { managementRouter } = require('./management/router');
 
 const publicDirectory = path.join(__dirname, 'public');
@@ -33,8 +34,9 @@ app.get('/api/*', async (req, res) => {
     const config = configStore.get();
     const entryFormat = config.app?.Fingerprints?.ReportsParams?.entryFormat || '\n{url}';
     await fs.promises.appendFile(reportsPath, entryFormat.replace('{url}', requestedUrl), 'utf8');
-    // Curently adds all websites to reports.txt
-    // Assuming the server will return true, the server will add the URL paramater to the list.
+    // Fire-and-forget: persists in the background so it never adds latency
+    // to the response, and blocklistStore already logs its own failures.
+    blocklistStore.add(requestedUrl);
     return res.type('text/plain').send('true');
   }
 

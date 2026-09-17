@@ -13,6 +13,12 @@ const fingerprintsDirectory = path.resolve(
 const minimumConfidence = Number(
   config.app?.Fingerprints?.db?.minimumConfidence ?? 70
 );
+const fingerprintReloadIntervalMs = Number(
+  config.app?.Fingerprints?.db?.reloadInterval ?? 60000
+);
+
+const RESULT_CACHE_MAX_ENTRIES = 5000;
+const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
 
 function normalizeUrl(url) {
   if (!url) {
@@ -38,17 +44,22 @@ function getTokens(input) {
     .filter(Boolean);
 }
 
-function diceCoefficient(left, right) {
-  const leftTokens = getTokens(left);
-  const rightTokens = getTokens(right);
+function tokenSetOf(input) {
+  return new Set(getTokens(input));
+}
 
-  if (leftTokens.length === 0 || rightTokens.length === 0) {
+// Iterates the smaller set so the cost scales with min(|a|, |b|) instead of
+// always walking the target's tokens.
+function diceScoreFromSets(leftSet, rightSet) {
+  if (leftSet.size === 0 || rightSet.size === 0) {
     return 0;
   }
 
-  const leftSet = new Set(leftTokens);
-  const rightSet = new Set(rightTokens);
-  const intersection = [...leftSet].filter((token) => rightSet.has(token)).length;
+  const [smaller, larger] = leftSet.size <= rightSet.size ? [leftSet, rightSet] : [rightSet, leftSet];
+  let intersection = 0;
+  for (const token of smaller) {
+    if (larger.has(token)) intersection++;
+  }
 
   if (intersection === 0) {
     return 0;
@@ -104,7 +115,32 @@ async function collectUrlScripts(url) {
   return scripts.filter((scriptText) => scriptText && scriptText.trim().length > 0);
 }
 
-async function loadFingerprints() {
+async function gatherJavaScriptFiles(directory) {
+  const entries = await fs.promises.readdir(directory, {
+    withFileTypes: true
+  });
+
+  const files = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      const nestedFiles = await gatherJavaScriptFiles(entryPath);
+      files.push(...nestedFiles);
+      continue;
+    }
+
+    if (entry.isFile() && entry.name.toLowerCase().endsWith('.js')) {
+      const content = await fs.promises.readFile(entryPath, 'utf-8');
+      files.push({ path: entryPath, content });
+    }
+  }
+
+  return files;
+}
+
+async function loadFingerprintsFromDisk() {
   if (!fs.existsSync(fingerprintsDirectory)) {
     return [];
   }
@@ -131,65 +167,118 @@ async function loadFingerprints() {
 
     fingerprints.push({
       name: folderName,
-      content
+      tokenSet: tokenSetOf(content)
     });
   }
 
   return fingerprints;
 }
 
-async function gatherJavaScriptFiles(directory) {
-  const entries = await fs.promises.readdir(directory, {
-    withFileTypes: true
-  });
+// The fingerprint DB rarely changes, so it's loaded once and kept in memory
+// (with token sets precomputed) instead of re-reading and re-tokenizing
+// every file on every comparison. It's refreshed lazily, at most once every
+// `reloadInterval` ms, and can be forced immediately via
+// invalidateFingerprintCache() when the management panel edits fingerprints.
+let fingerprintCache = { entries: [], loadedAt: 0 };
+let fingerprintLoadPromise = null;
 
-  const files = [];
+async function getFingerprintEntries() {
+  const isStale = Date.now() - fingerprintCache.loadedAt >= fingerprintReloadIntervalMs;
 
-  for (const entry of entries) {
-    const entryPath = path.join(directory, entry.name);
-
-    if (entry.isDirectory()) {
-      const nestedFiles = await gatherJavaScriptFiles(entryPath);
-      files.push(...nestedFiles);
-      continue;
-    }
-
-    if (entry.isFile() && entry.name.toLowerCase().endsWith('.js')) {
-      const content = await fs.promises.readFile(entryPath, 'utf-8');
-      files.push({ path: entryPath, content });
-    }
+  if (!isStale) {
+    return fingerprintCache.entries;
   }
 
-  return files;
+  if (!fingerprintLoadPromise) {
+    fingerprintLoadPromise = loadFingerprintsFromDisk()
+      .then((entries) => {
+        fingerprintCache = { entries, loadedAt: Date.now() };
+        return entries;
+      })
+      .finally(() => {
+        fingerprintLoadPromise = null;
+      });
+  }
+
+  return fingerprintLoadPromise;
+}
+
+function invalidateFingerprintCache() {
+  fingerprintCache = { entries: [], loadedAt: 0 };
+}
+
+// Repeat lookups for the same site (very common for a filtering proxy) are
+// served from this cache instead of re-fetching and re-comparing.
+const resultCache = new Map();
+
+function getCachedResult(key) {
+  const entry = resultCache.get(key);
+  if (!entry) return undefined;
+
+  if (Date.now() > entry.expiresAt) {
+    resultCache.delete(key);
+    return undefined;
+  }
+
+  // Bump recency for the LRU eviction below.
+  resultCache.delete(key);
+  resultCache.set(key, entry);
+  return entry.result;
+}
+
+function setCachedResult(key, result) {
+  resultCache.delete(key);
+  resultCache.set(key, { result, expiresAt: Date.now() + RESULT_CACHE_TTL_MS });
+
+  if (resultCache.size > RESULT_CACHE_MAX_ENTRIES) {
+    const oldestKey = resultCache.keys().next().value;
+    resultCache.delete(oldestKey);
+  }
 }
 
 async function comparison(url) {
+  let normalizedUrl;
   try {
-    const normalizedUrl = normalizeUrl(url);
+    normalizedUrl = normalizeUrl(url);
+  } catch (error) {
+    console.error(`Comparison failed for ${url}: ${error.message}`);
+    return false;
+  }
+
+  const cachedResult = getCachedResult(normalizedUrl);
+  if (cachedResult !== undefined) {
+    return cachedResult;
+  }
+
+  try {
     const targetScripts = await collectUrlScripts(normalizedUrl);
     const targetScriptText = targetScripts.join('\n');
 
     if (!targetScriptText.trim()) {
+      setCachedResult(normalizedUrl, false);
       return false;
     }
 
-    const fingerprints = await loadFingerprints();
+    const fingerprints = await getFingerprintEntries();
 
     if (fingerprints.length === 0) {
       return false;
     }
 
+    const targetTokenSet = tokenSetOf(targetScriptText);
     let bestScore = 0;
 
     for (const fingerprint of fingerprints) {
-      const score = diceCoefficient(targetScriptText, fingerprint.content) * 100;
+      const score = diceScoreFromSets(targetTokenSet, fingerprint.tokenSet) * 100;
 
       if (score > bestScore) {
         bestScore = score;
       }
     }
 
-    return bestScore >= minimumConfidence;
+    const isMatch = bestScore >= minimumConfidence;
+    setCachedResult(normalizedUrl, isMatch);
+    return isMatch;
   } catch (error) {
     console.error(`Comparison failed for ${url}: ${error.message}`);
     return false;
@@ -210,4 +299,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { comparison };
+module.exports = { comparison, invalidateFingerprintCache };
