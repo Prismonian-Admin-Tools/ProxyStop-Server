@@ -14,8 +14,7 @@ A browser-based admin console lives at `/manage`, styled to match
 ProxyStop accounts. Env vars and code still say `GUS_*`/`gus` for
 backward compatibility; it's the same service under its new name.
 
-- **Dashboard** — fingerprint/group/domain counts, server status, and recently flagged sites.
-- **Groups** — create/rename/delete whitelist groups and add or remove domains (`whitelist.json`).
+- **Dashboard** — fingerprint counts, server status, and recently flagged sites.
 - **Fingerprints** — list, inspect, delete, and create new fingerprints by scraping a source URL.
 - **Configuration** (manage-capable ranks only) — edit `config.json`'s server, fingerprint-detection, reports, scraper, and management-server settings.
 
@@ -62,9 +61,14 @@ console offline entirely (`/manage` then responds `403` to everyone).
 
 ### Client groups
 
-The groups managed on the Groups page classify ProxyStop's actual
-clients — the students, staff, and admins on the network — not arbitrary
-domain categories. `whitelist.json` ships with six default groups:
+`whitelist.json` ships with six default groups that classify
+ProxyStop's actual clients — the students, staff, and admins on the
+network — not arbitrary domain categories. There's no admin-console UI
+for these yet: the old Groups tab edited domain lists per group, which
+doesn't match this model (classifying clients, not listing domains), so
+it was removed rather than left managing the wrong shape of data. Edit
+`whitelist.json` directly until the real client-classification feature
+is designed and built.
 
 | Group | Who | Intended behavior |
 |---|---|---|

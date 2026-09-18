@@ -2,7 +2,6 @@
 const fs = require('fs');
 const path = require('path');
 const configStore = require('./configStore');
-const groupsStore = require('./groupsStore');
 const fingerprintsStore = require('./fingerprintsStore');
 
 const REPORTS_PATH = path.join(__dirname, '..', '..', 'reports.txt');
@@ -18,9 +17,8 @@ function readReports() {
 
 async function build() {
   const config = configStore.get();
-  const [groups, fingerprints] = await Promise.all([groupsStore.list(), fingerprintsStore.list()]);
+  const fingerprints = await fingerprintsStore.list();
   const reports = readReports();
-  const domainCount = groups.reduce((sum, group) => sum + group.domainCount, 0);
 
   return {
     server: {
@@ -33,7 +31,6 @@ async function build() {
       count: fingerprints.length,
       minimumConfidence: config.app?.Fingerprints?.db?.minimumConfidence ?? null,
     },
-    groups: { count: groups.length, domainCount },
     reports,
   };
 }

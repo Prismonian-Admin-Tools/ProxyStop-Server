@@ -3,7 +3,6 @@ const express = require('express');
 const gus = require('./gusClient');
 const { requireAuth, requireManage, canManage } = require('./auth');
 const configStore = require('./stores/configStore');
-const groupsStore = require('./stores/groupsStore');
 const fingerprintsStore = require('./stores/fingerprintsStore');
 const overviewStore = require('./stores/overviewStore');
 
@@ -145,35 +144,6 @@ function managementRouter() {
   router.get('/overview', async (req, res) => {
     try { res.json(await overviewStore.build()); }
     catch (err) { res.status(500).json({ error: err.message }); }
-  });
-
-  /* ---- groups ---- */
-  router.get('/groups', async (req, res) => {
-    try { res.json(await groupsStore.list()); }
-    catch (err) { res.status(500).json({ error: err.message }); }
-  });
-  router.post('/groups', requireManage, async (req, res) => {
-    try { res.json(await groupsStore.create(req.body?.name)); }
-    catch (err) { res.status(400).json({ error: err.message }); }
-  });
-  router.patch('/groups/:name', requireManage, async (req, res) => {
-    try { res.json(await groupsStore.rename(req.params.name, req.body?.newName)); }
-    catch (err) { res.status(400).json({ error: err.message }); }
-  });
-  router.delete('/groups/:name', requireManage, async (req, res) => {
-    try { await groupsStore.remove(req.params.name); res.json({ ok: true }); }
-    catch (err) { res.status(400).json({ error: err.message }); }
-  });
-  router.post('/groups/:name/domains', requireManage, async (req, res) => {
-    try {
-      const { domain, domains } = req.body || {};
-      const result = Array.isArray(domains) ? await groupsStore.addDomains(req.params.name, domains) : await groupsStore.addDomain(req.params.name, domain);
-      res.json(result);
-    } catch (err) { res.status(400).json({ error: err.message }); }
-  });
-  router.delete('/groups/:name/domains/:domain', requireManage, async (req, res) => {
-    try { res.json(await groupsStore.removeDomain(req.params.name, req.params.domain)); }
-    catch (err) { res.status(400).json({ error: err.message }); }
   });
 
   /* ---- fingerprints ---- */
