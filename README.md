@@ -14,8 +14,7 @@ A browser-based admin console lives at `/manage`, styled to match
 ProxyStop accounts. Env vars and code still say `GUS_*`/`gus` for
 backward compatibility; it's the same service under its new name.
 
-- **Dashboard** — fingerprint/group/domain counts, server status, and recently flagged sites.
-- **Groups** — create/rename/delete whitelist groups and add or remove domains (`whitelist.json`).
+- **Dashboard** — fingerprint/blocklist counts, server status, and recently flagged sites.
 - **Fingerprints** — list, inspect, delete, and create new fingerprints by scraping a source URL.
 - **Configuration** (manage-capable ranks only) — edit `config.json`'s server, fingerprint-detection, reports, scraper, and management-server settings.
 

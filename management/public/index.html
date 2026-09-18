@@ -196,7 +196,7 @@
 
 const ICONS = {
   dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
-  groups: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M2.5 19c1-3.3 3.8-5 6.5-5s5.5 1.7 6.5 5"/><circle cx="17" cy="7" r="2.3"/><path d="M15.5 12.3c2 .2 3.8 1.8 4.5 4.2"/></svg>',
+  blocklist: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
   fingerprints: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 00-9 9c0 2.5 1 4.5 2 6"/><path d="M12 3a9 9 0 019 9c0 3-1 5-2 7"/><path d="M12 7a5 5 0 00-5 5c0 2 .5 3.5 1.5 5"/><path d="M12 7a5 5 0 015 5c0 2.5-.7 4-1.5 5.5"/><path d="M12 11a1 1 0 00-1 1c0 3 1 5 2 7"/></svg>',
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 000-2l2-1.5-2-3.5-2.4.5a8 8 0 00-1.7-1L15 3h-6l-.3 2.5a8 8 0 00-1.7 1l-2.4-.5-2 3.5L4.6 11a7.9 7.9 0 000 2l-2 1.5 2 3.5 2.4-.5a8 8 0 001.7 1L9 21h6l.3-2.5a8 8 0 001.7-1l2.4.5 2-3.5-2-1.5z"/></svg>',
   activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>',
@@ -390,7 +390,7 @@ function render() {
   const app = document.getElementById('app');
   app.innerHTML = '';
 
-  const tabs = [['dashboard', 'Dashboard', 'dashboard'], ['groups', 'Groups', 'groups'], ['fingerprints', 'Fingerprints', 'fingerprints']];
+  const tabs = [['dashboard', 'Dashboard', 'dashboard'], ['fingerprints', 'Fingerprints', 'fingerprints'], ['blocklist', 'Blocklist', 'blocklist']];
   if (state.canManage) tabs.push(['config', 'Configuration', 'settings']);
 
   const navEl = el('nav', {}, [
@@ -417,8 +417,8 @@ function render() {
   app.appendChild(el('div', {}, [header, el('main', {}, [navEl, content])]));
 
   if (state.view === 'dashboard') renderDashboard(content);
-  if (state.view === 'groups') renderGroups(content);
   if (state.view === 'fingerprints') renderFingerprints(content);
+  if (state.view === 'blocklist') renderBlocklist(content);
   if (state.view === 'config') renderConfig(content);
 }
 
@@ -449,8 +449,7 @@ async function renderDashboard(content) {
 
   content.appendChild(el('div', { class: 'stat-grid' }, [
     el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.fingerprints.count }), el('div', { class: 'label', text: 'Fingerprints' })]),
-    el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.groups.count }), el('div', { class: 'label', text: 'Groups' })]),
-    el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.groups.domainCount }), el('div', { class: 'label', text: 'Whitelisted domains' })]),
+    el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.blocklist.count }), el('div', { class: 'label', text: 'Blocklisted sites' })]),
     el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.reports.total }), el('div', { class: 'label', text: 'Flagged sites' })]),
     el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: uptimeH + 'h ' + uptimeM + 'm' }), el('div', { class: 'label', text: 'Server uptime' })]),
   ]));
@@ -472,146 +471,52 @@ async function renderDashboard(content) {
   ]));
 }
 
-/* ---------------- groups ---------------- */
-async function renderGroups(content) {
-  let groups;
-  try { groups = await api('/groups'); }
+/* ---------------- blocklist ---------------- */
+async function renderBlocklist(content) {
+  let sites;
+  try { sites = await api('/blocklist'); }
   catch (e) { content.innerHTML = ''; content.appendChild(el('div', { class: 'err', text: e.message })); return; }
   content.innerHTML = '';
 
-  function makeRow(g) {
+  async function removeSite(site) {
+    if (!confirm('Remove "' + site + '" from the blocklist?')) return;
+    try {
+      await api('/blocklist/' + encodeURIComponent(site), { method: 'DELETE' });
+      toast('Removed from blocklist', 'ok');
+      renderBlocklist(content);
+    } catch (e) { toast(e.message, 'err'); }
+  }
+
+  function makeRow(site) {
     return el('tr', {}, [
-      el('td', {}, [el('div', { class: 'name-cell' }, [icon('groups'), el('span', { text: g.name })])]),
-      el('td', { text: g.domainCount + ' domain' + (g.domainCount === 1 ? '' : 's') }),
-      el('td', { class: 'row-actions' }, [el('button', { class: 'btn-ghost btn-sm', text: state.canManage ? 'Manage' : 'View', onclick: () => openGroupModal(g) })]),
+      el('td', { class: 'mono', text: site }),
+      el('td', { class: 'row-actions' }, [
+        state.canManage ? el('button', { class: 'btn-danger btn-sm', text: 'Remove', onclick: () => removeSite(site) }) : null,
+      ]),
     ]);
   }
 
-  const search = el('input', { type: 'text', placeholder: 'Search groups…' });
-  const tbody = el('tbody', {}, groups.map(makeRow));
+  const search = el('input', { type: 'text', placeholder: 'Search blocklist…' });
+  const tbody = el('tbody', {}, sites.map(makeRow));
   search.addEventListener('input', () => {
     const q = search.value.toLowerCase();
     tbody.innerHTML = '';
-    groups.filter((g) => g.name.toLowerCase().includes(q)).forEach((g) => tbody.appendChild(makeRow(g)));
+    sites.filter((s) => s.toLowerCase().includes(q)).forEach((s) => tbody.appendChild(makeRow(s)));
   });
 
   content.appendChild(el('div', {}, [
-    el('h2', {}, [icon('groups'), el('span', { text: 'Groups' })]),
-    el('div', { class: 'pagesub', text: groups.length + ' whitelist group' + (groups.length === 1 ? '' : 's') + '.' }),
-    el('div', { class: 'toolbar' }, [
-      search,
-      state.canManage ? el('button', { class: 'btn-primary', text: '+ New group', onclick: () => openNewGroupModal() }) : null,
-    ]),
-    el('table', {}, [
-      el('thead', {}, [el('tr', {}, ['Group', 'Domains', ''].map((h) => el('th', { text: h })))]),
-      tbody,
-    ]),
+    el('h2', {}, [icon('blocklist'), el('span', { text: 'Blocklist' })]),
+    el('div', { class: 'pagesub', text: sites.length + ' site' + (sites.length === 1 ? '' : 's') + ' automatically blocklisted after a confirmed proxy match.' }),
+    sites.length
+      ? el('div', {}, [
+          el('div', { class: 'toolbar' }, [search]),
+          el('table', {}, [
+            el('thead', {}, [el('tr', {}, ['Site', ''].map((h) => el('th', { text: h })))]),
+            tbody,
+          ]),
+        ])
+      : el('div', { class: 'panel' }, [el('div', { class: 'empty-note', text: 'No sites have been blocklisted yet.' })]),
   ]));
-}
-
-function openNewGroupModal() {
-  const name = el('input', { type: 'text', placeholder: 'e.g. StudentTesting' });
-  const errEl = el('div', { class: 'err' });
-  async function submit() {
-    errEl.textContent = '';
-    try {
-      await api('/groups', { method: 'POST', body: { name: name.value } });
-      closeModal();
-      toast('Group created', 'ok');
-      renderGroups(document.getElementById('content'));
-    } catch (e) { errEl.textContent = e.message; }
-  }
-  openModal([
-    el('h3', {}, [icon('plus'), el('span', { text: 'New group' })]),
-    el('label', { text: 'Group name' }), name,
-    errEl,
-    el('div', { class: 'modal-actions' }, [
-      el('div', { class: 'right' }, [
-        el('button', { class: 'btn-ghost', text: 'Cancel', onclick: closeModal }),
-        el('button', { class: 'btn-primary', text: 'Create', onclick: submit }),
-      ]),
-    ]),
-  ]);
-}
-
-function openGroupModal(g) {
-  const errEl = el('div', { class: 'err' });
-  const chipList = el('div', { class: 'domain-chip-list' });
-
-  function renderChips(domains) {
-    chipList.innerHTML = '';
-    if (!domains.length) { chipList.appendChild(el('div', { class: 'empty-note', text: 'No domains in this group yet.' })); return; }
-    domains.forEach((d) => {
-      const chip = el('div', { class: 'domain-chip' }, [el('span', { text: d })]);
-      if (state.canManage) {
-        chip.appendChild(el('button', {
-          text: '×', title: 'Remove', onclick: async () => {
-            try {
-              const updated = await api('/groups/' + encodeURIComponent(g.name) + '/domains/' + encodeURIComponent(d), { method: 'DELETE' });
-              g.domains = updated.domains;
-              renderChips(g.domains);
-            } catch (e) { errEl.textContent = e.message; }
-          },
-        }));
-      }
-      chipList.appendChild(chip);
-    });
-  }
-  renderChips(g.domains);
-
-  const bulk = el('textarea', { rows: '3', placeholder: 'example.com\nanother.example.com' });
-  async function addDomains() {
-    errEl.textContent = '';
-    const domains = bulk.value.split(/\r?\n/).map((d) => d.trim()).filter(Boolean);
-    if (!domains.length) return;
-    try {
-      const updated = await api('/groups/' + encodeURIComponent(g.name) + '/domains', { method: 'POST', body: { domains } });
-      g.domains = updated.domains;
-      bulk.value = '';
-      renderChips(g.domains);
-    } catch (e) { errEl.textContent = e.message; }
-  }
-
-  const renameInput = el('input', { type: 'text', value: g.name });
-  async function rename() {
-    errEl.textContent = '';
-    try {
-      await api('/groups/' + encodeURIComponent(g.name), { method: 'PATCH', body: { newName: renameInput.value } });
-      closeModal();
-      toast('Group renamed', 'ok');
-      renderGroups(document.getElementById('content'));
-    } catch (e) { errEl.textContent = e.message; }
-  }
-  async function del() {
-    if (!confirm('Delete group "' + g.name + '"? This cannot be undone.')) return;
-    try {
-      await api('/groups/' + encodeURIComponent(g.name), { method: 'DELETE' });
-      closeModal();
-      toast('Group deleted', 'ok');
-      renderGroups(document.getElementById('content'));
-    } catch (e) { errEl.textContent = e.message; }
-  }
-
-  const body = [
-    el('h3', {}, [icon('groups'), el('span', { text: g.name })]),
-    el('label', { text: 'Domains' }), chipList,
-  ];
-  if (state.canManage) {
-    body.push(
-      el('label', { text: 'Add domains (one per line)' }), bulk,
-      el('button', { class: 'btn-ghost btn-sm', text: 'Add', style: 'margin-top:8px', onclick: addDomains }),
-      el('div', { class: 'divider' }),
-      el('label', { text: 'Rename group' }), renameInput,
-      el('button', { class: 'btn-ghost btn-sm', text: 'Rename', style: 'margin-top:8px', onclick: rename }),
-    );
-  }
-  body.push(errEl);
-  body.push(el('div', { class: 'modal-actions' }, [
-    state.canManage ? el('button', { class: 'btn-danger', text: 'Delete group', onclick: del }) : null,
-    el('div', { class: 'right' }, [el('button', { class: 'btn-ghost', text: 'Close', onclick: closeModal })]),
-  ]));
-
-  openModal(body);
 }
 
 /* ---------------- fingerprints ---------------- */
