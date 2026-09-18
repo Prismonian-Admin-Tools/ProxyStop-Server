@@ -11,11 +11,12 @@
     --radius: 10px;
   }
   /* ---- theme tokens, matched to Passport (formerly GUS) so any app
-     behind the same login feels like one product family. Passport's own
-     bare-html default moved to blueSharp; ProxyStop keeps ember as ITS
-     fallback for the brief pre-login instant, since every signed-in view
-     immediately applies the admin's real profile.theme anyway. ---- */
-  html, [data-theme="ember"] {
+     behind the same login feels like one product family. Passport
+     defaults to blueSharp (bound to bare html below, same as Passport
+     itself) — ProxyStop follows suit for the brief pre-login instant too,
+     though every signed-in view immediately applies the admin's real
+     profile.theme regardless. ---- */
+  [data-theme="ember"] {
     --bg: #0b0e11; --bg-alt: #12161b; --surface: #12161b; --surface-2: #181d24;
     --border: #252b34; --border-soft: #1c212a;
     --text: #e8e6e1; --text-dim: #818996; --text-faint: #4f5561;
@@ -51,8 +52,9 @@
     --green: #7fdcb8; --red: #f07871; --yellow: #eec35c; --blue: #83b8e6;
   }
   /* ---- the "sharp" family: pure black/white, maximum border-vs-surface
-     contrast, for anyone who wants edges over ambience. ---- */
-  [data-theme="blueSharp"] {
+     contrast, for anyone who wants edges over ambience. blueSharp is the
+     app default (bound to bare html), matching Passport's own default. ---- */
+  html, [data-theme="blueSharp"] {
     --bg: #000000; --bg-alt: #0a0a0a; --surface: #000000; --surface-2: #111111;
     --border: #ffffff; --border-soft: #666666;
     --text: #ffffff; --text-dim: #cccccc; --text-faint: #999999;
@@ -69,6 +71,17 @@
 
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); transition: background .2s, color .2s; }
+  /* A toned-down echo of the login screen's own glow (.center-screen::before
+     below, opacity .8) behind the signed-in app too — negative z-index so it
+     sits under #app's normal-flow content, and only actually shows through
+     where a child has no opaque background of its own (section.content is
+     transparent; header/nav aren't, so they stay fully legible). */
+  body::before {
+    content: ''; position: fixed; inset: -10%; z-index: -1; pointer-events: none;
+    background: radial-gradient(circle at 25% 15%, var(--accent-glow), transparent 50%),
+                radial-gradient(circle at 85% 85%, var(--accent-glow), transparent 45%);
+    opacity: .2;
+  }
   #app { min-height: 100vh; display: flex; flex-direction: column; }
   a { color: var(--accent); }
   ::selection { background: var(--accent-glow); }
@@ -222,7 +235,7 @@ async function api(path, opts = {}) {
 
 const THEMES = ['ember', 'ocean', 'forest', 'light', 'purple', 'blueSharp', 'purpleSharp'];
 function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme && THEMES.includes(theme) ? theme : 'ember');
+  document.documentElement.setAttribute('data-theme', theme && THEMES.includes(theme) ? theme : 'blueSharp');
 }
 
 function toast(msg, kind) {
@@ -279,7 +292,7 @@ function applySession(result) {
 
 /* ---------------- boot ---------------- */
 async function boot() {
-  applyTheme('ember');
+  applyTheme('blueSharp');
   try {
     applySession(await api('/session'));
   } catch (e) {
