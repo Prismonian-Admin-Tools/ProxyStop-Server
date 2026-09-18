@@ -1,11 +1,12 @@
 'use strict';
 
-// Talks to GUS's app-facing contract (see the "Global Admin Account
-// System" README, section "The app-facing contract (/api/v1/*)").
-// Every call is authenticated as THIS APPLICATION via X-App-Id/X-App-Secret
-// (issued once by `npm run bootstrap -- --app <slug>` on the GUS side) —
-// separate from the admin's own username/password, which travels in the
-// request body and is verified by GUS, never by us.
+// Talks to Passport's (formerly GUS/GAM) app-facing contract — see that
+// repo's README, section "The app-facing contract (/api/v1/*)". Every
+// call is authenticated as THIS APPLICATION via X-App-Id/X-App-Secret
+// (issued once by `npm run bootstrap -- --app <slug>` on the Passport
+// side) — separate from the admin's own username/password, which travels
+// in the request body and is verified by Passport, never by us. Env vars
+// keep the GUS_* names for backward compatibility with existing deploys.
 
 function baseUrl() {
   return (process.env.GUS_BASE_URL || '').replace(/\/+$/, '');
@@ -39,6 +40,16 @@ function login(username, password) {
   return callGus('/login', { username, password });
 }
 
+/**
+ * Completes a `good_mfa_required` challenge from login. Only reachable if
+ * a sysadmin opts this app into MFA challenges from Passport's Apps tab
+ * (`supportsMfaChallenge`) — inert until then, since /login never returns
+ * that status otherwise.
+ */
+function loginMfa(mfaTicket, code) {
+  return callGus('/login/mfa', { mfaTicket, token: code });
+}
+
 function validate(token) {
   return callGus('/validate', { token });
 }
@@ -51,4 +62,4 @@ function changePassword(token, currentPassword, newPassword, confirmPassword) {
   return callGus('/change-password', { token, currentPassword, newPassword, confirmPassword });
 }
 
-module.exports = { isConfigured, login, validate, logout, changePassword };
+module.exports = { isConfigured, login, loginMfa, validate, logout, changePassword };

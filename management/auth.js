@@ -1,19 +1,34 @@
 'use strict';
 const gus = require('./gusClient');
 
-// GUS's three global roles. This app decides for itself what each bucket
-// can do here (per GUS's own README: "What each role can actually do
-// inside a given app is that app's own business") — owners and admins can
-// change configuration, groups, and fingerprints; moderators get read-only
-// access to everything but Configuration.
-const MANAGE_ROLES = new Set(['owner', 'admin']);
+// Passport (formerly GUS) replaced its three fixed global roles with
+// ranks: four built-ins, plus any custom rank a sysadmin creates with its
+// own capability set. Passport only ever hands us the rank NAME on the
+// user profile — never its capabilities — because "what a rank can
+// actually do inside a given app is that app's own business" (Passport's
+// own README). So this is ProxyStop's own opinion of each KNOWN rank; an
+// unrecognized name (a custom rank, or a future built-in) defaults to
+// view-only rather than being rejected outright — a sysadmin can still
+// sign everyone in, ProxyStop just can't assume a stranger's rank means
+// "trusted with edits." The pre-rank role names are kept too, in case an
+// older Passport deployment (or a not-yet-migrated account) still uses them.
+const MANAGE_RANKS = new Set([
+  'trustedInstaller', // Provider — hardcoded full access on the Passport side
+  'systemAdministrator', // Sysadmin — replaces the old "owner"
+  'elevatedStaff', // ElevatedAdmins — replaces the old "admin"
+  'owner', 'admin', // pre-rank role names, kept for compatibility
+]);
 const REVALIDATE_INTERVAL_MS = 60_000;
 
+function canManage(rank) {
+  return MANAGE_RANKS.has(rank);
+}
+
 /**
- * Mirrors GUS's own session model: we hold a token GUS issued us for this
- * admin, and periodically re-check it with GUS's /validate endpoint so a
- * disable or role change on the GUS side takes effect here without the
- * admin needing to sign out and back in.
+ * Mirrors Passport's own session model: we hold a token Passport issued
+ * us for this admin, and periodically re-check it with Passport's
+ * /validate endpoint so a disable or rank change on that side takes
+ * effect here without the admin needing to sign out and back in.
  */
 function requireAuth() {
   return async (req, res, next) => {
@@ -39,10 +54,10 @@ function requireAuth() {
 }
 
 function requireManage(req, res, next) {
-  if (!MANAGE_ROLES.has(req.session.user.role)) {
-    return res.status(403).json({ error: 'Your role does not permit making changes.' });
+  if (!canManage(req.session.user.role)) {
+    return res.status(403).json({ error: 'Your rank does not permit making changes.' });
   }
   next();
 }
 
-module.exports = { requireAuth, requireManage, MANAGE_ROLES };
+module.exports = { requireAuth, requireManage, canManage, MANAGE_RANKS };
