@@ -83,12 +83,15 @@ async function remove(name) {
   const target = resolveFingerprintPath(name);
   if (!fs.existsSync(target)) throw new Error(`Fingerprint "${name}" does not exist.`);
   await fs.promises.rm(target, { recursive: true, force: true });
+  require('../../scripts/processor').invalidateFingerprintCache();
 }
 
 async function createFromUrl(name, url) {
   resolveFingerprintPath(name); // validates the name before we touch the network
   const { createFingerprint } = require('../../scripts/fingerprintMaker');
-  return createFingerprint(url, name);
+  const result = await createFingerprint(url, name);
+  require('../../scripts/processor').invalidateFingerprintCache();
+  return result;
 }
 
 module.exports = { list, listFiles, remove, createFromUrl, fingerprintsDir };

@@ -5,6 +5,7 @@ const { requireAuth, requireManage, canManage } = require('./auth');
 const configStore = require('./stores/configStore');
 const fingerprintsStore = require('./stores/fingerprintsStore');
 const overviewStore = require('./stores/overviewStore');
+const blocklistStore = require('./stores/blocklistStore');
 
 function gusBaseUrl() {
   return (process.env.GUS_BASE_URL || '').replace(/\/+$/, '');
@@ -144,6 +145,16 @@ function managementRouter() {
   router.get('/overview', async (req, res) => {
     try { res.json(await overviewStore.build()); }
     catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  /* ---- blocklist ---- */
+  router.get('/blocklist', async (req, res) => {
+    try { res.json(await blocklistStore.list()); }
+    catch (err) { res.status(500).json({ error: err.message }); }
+  });
+  router.delete('/blocklist/:site', requireManage, async (req, res) => {
+    try { await blocklistStore.remove(req.params.site); res.json({ ok: true }); }
+    catch (err) { res.status(400).json({ error: err.message }); }
   });
 
   /* ---- fingerprints ---- */

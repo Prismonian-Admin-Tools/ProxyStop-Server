@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const configStore = require('./configStore');
 const fingerprintsStore = require('./fingerprintsStore');
+const blocklistStore = require('./blocklistStore');
 
 const REPORTS_PATH = path.join(__dirname, '..', '..', 'reports.txt');
 
@@ -17,7 +18,7 @@ function readReports() {
 
 async function build() {
   const config = configStore.get();
-  const fingerprints = await fingerprintsStore.list();
+  const [fingerprints, blocklist] = await Promise.all([fingerprintsStore.list(), blocklistStore.list()]);
   const reports = readReports();
 
   return {
@@ -31,6 +32,7 @@ async function build() {
       count: fingerprints.length,
       minimumConfidence: config.app?.Fingerprints?.db?.minimumConfidence ?? null,
     },
+    blocklist: { count: blocklist.length },
     reports,
   };
 }

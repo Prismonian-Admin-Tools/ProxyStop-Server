@@ -14,7 +14,7 @@ A browser-based admin console lives at `/manage`, styled to match
 ProxyStop accounts. Env vars and code still say `GUS_*`/`gus` for
 backward compatibility; it's the same service under its new name.
 
-- **Dashboard** — fingerprint counts, server status, and recently flagged sites.
+- **Dashboard** — fingerprint/blocklist counts, server status, and recently flagged sites.
 - **Fingerprints** — list, inspect, delete, and create new fingerprints by scraping a source URL.
 - **Configuration** (manage-capable ranks only) — edit `config.json`'s server, fingerprint-detection, reports, scraper, and management-server settings.
 
@@ -58,39 +58,3 @@ app.
 
 Set `app.managementServer.enabled` to `false` in `config.json` to take the
 console offline entirely (`/manage` then responds `403` to everyone).
-
-### Client groups
-
-`whitelist.json` ships with six default groups that classify
-ProxyStop's actual clients — the students, staff, and admins on the
-network — not arbitrary domain categories. There's no admin-console UI
-for these yet: the old Groups tab edited domain lists per group, which
-doesn't match this model (classifying clients, not listing domains), so
-it was removed rather than left managing the wrong shape of data. Edit
-`whitelist.json` directly until the real client-classification feature
-is designed and built.
-
-| Group | Who | Intended behavior |
-|---|---|---|
-| `Sysadmin` | District system administrators, usually with backend access | Highest rank — no other group's settings can override a Sysadmin's |
-| `ElevatedStaff` | IT workers | Can sign into the management console and manage groups |
-| `StaffUsers` | Teachers | Behaves like `StudentUsers`, but a `Sysadmin` can modify its settings |
-| `StudentUsers` | The default group for newly enrolled students | Some sites can be unblocked |
-| `HighschoolStudent` | Students at schools that grant more freedom | Some sites can be unblocked |
-| `EduOnly` | Special placement, assigned by `ElevatedStaff` | Every fingerprinted site stays blocked |
-
-None of this is enforced yet — the six groups exist as defaults, but
-nothing currently ties group membership to fingerprint blocking or to who
-can sign into `/manage` (that's still governed entirely by Passport's
-ranks, per above). This table records the intended design for when that
-wiring is built.
-
-Don't confuse these with Passport's own ranks above, even though the
-names echo each other (`Sysadmin`/`systemAdministrator`,
-`ElevatedStaff`/`elevatedStaff`) — Passport's ranks decide who can sign
-into `/manage` at all; these groups classify the network's actual client
-population and, once wired up, will decide whose *traffic* gets which
-fingerprints blocked. The same person could plausibly hold both:
-signed into `/manage` as Passport's `systemAdministrator`, while their
-own laptop is classified under ProxyStop's `Sysadmin` client group.
-

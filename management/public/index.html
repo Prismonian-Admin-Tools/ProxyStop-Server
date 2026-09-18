@@ -196,6 +196,7 @@
 
 const ICONS = {
   dashboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
+  blocklist: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
   fingerprints: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 00-9 9c0 2.5 1 4.5 2 6"/><path d="M12 3a9 9 0 019 9c0 3-1 5-2 7"/><path d="M12 7a5 5 0 00-5 5c0 2 .5 3.5 1.5 5"/><path d="M12 7a5 5 0 015 5c0 2.5-.7 4-1.5 5.5"/><path d="M12 11a1 1 0 00-1 1c0 3 1 5 2 7"/></svg>',
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 000-2l2-1.5-2-3.5-2.4.5a8 8 0 00-1.7-1L15 3h-6l-.3 2.5a8 8 0 00-1.7 1l-2.4-.5-2 3.5L4.6 11a7.9 7.9 0 000 2l-2 1.5 2 3.5 2.4-.5a8 8 0 001.7 1L9 21h6l.3-2.5a8 8 0 001.7-1l2.4.5 2-3.5-2-1.5z"/></svg>',
   activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>',
@@ -389,7 +390,7 @@ function render() {
   const app = document.getElementById('app');
   app.innerHTML = '';
 
-  const tabs = [['dashboard', 'Dashboard', 'dashboard'], ['fingerprints', 'Fingerprints', 'fingerprints']];
+  const tabs = [['dashboard', 'Dashboard', 'dashboard'], ['fingerprints', 'Fingerprints', 'fingerprints'], ['blocklist', 'Blocklist', 'blocklist']];
   if (state.canManage) tabs.push(['config', 'Configuration', 'settings']);
 
   const navEl = el('nav', {}, [
@@ -417,6 +418,7 @@ function render() {
 
   if (state.view === 'dashboard') renderDashboard(content);
   if (state.view === 'fingerprints') renderFingerprints(content);
+  if (state.view === 'blocklist') renderBlocklist(content);
   if (state.view === 'config') renderConfig(content);
 }
 
@@ -447,6 +449,7 @@ async function renderDashboard(content) {
 
   content.appendChild(el('div', { class: 'stat-grid' }, [
     el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.fingerprints.count }), el('div', { class: 'label', text: 'Fingerprints' })]),
+    el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.blocklist.count }), el('div', { class: 'label', text: 'Blocklisted sites' })]),
     el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.reports.total }), el('div', { class: 'label', text: 'Flagged sites' })]),
     el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: uptimeH + 'h ' + uptimeM + 'm' }), el('div', { class: 'label', text: 'Server uptime' })]),
   ]));
@@ -465,6 +468,54 @@ async function renderDashboard(content) {
     overview.reports.recent.length
       ? el('table', {}, [el('tbody', {}, overview.reports.recent.map((url) => el('tr', {}, [el('td', { class: 'mono', text: url })])))])
       : el('div', { class: 'empty-note', text: 'No sites have been flagged yet.' }),
+  ]));
+}
+
+/* ---------------- blocklist ---------------- */
+async function renderBlocklist(content) {
+  let sites;
+  try { sites = await api('/blocklist'); }
+  catch (e) { content.innerHTML = ''; content.appendChild(el('div', { class: 'err', text: e.message })); return; }
+  content.innerHTML = '';
+
+  async function removeSite(site) {
+    if (!confirm('Remove "' + site + '" from the blocklist?')) return;
+    try {
+      await api('/blocklist/' + encodeURIComponent(site), { method: 'DELETE' });
+      toast('Removed from blocklist', 'ok');
+      renderBlocklist(content);
+    } catch (e) { toast(e.message, 'err'); }
+  }
+
+  function makeRow(site) {
+    return el('tr', {}, [
+      el('td', { class: 'mono', text: site }),
+      el('td', { class: 'row-actions' }, [
+        state.canManage ? el('button', { class: 'btn-danger btn-sm', text: 'Remove', onclick: () => removeSite(site) }) : null,
+      ]),
+    ]);
+  }
+
+  const search = el('input', { type: 'text', placeholder: 'Search blocklist…' });
+  const tbody = el('tbody', {}, sites.map(makeRow));
+  search.addEventListener('input', () => {
+    const q = search.value.toLowerCase();
+    tbody.innerHTML = '';
+    sites.filter((s) => s.toLowerCase().includes(q)).forEach((s) => tbody.appendChild(makeRow(s)));
+  });
+
+  content.appendChild(el('div', {}, [
+    el('h2', {}, [icon('blocklist'), el('span', { text: 'Blocklist' })]),
+    el('div', { class: 'pagesub', text: sites.length + ' site' + (sites.length === 1 ? '' : 's') + ' automatically blocklisted after a confirmed proxy match.' }),
+    sites.length
+      ? el('div', {}, [
+          el('div', { class: 'toolbar' }, [search]),
+          el('table', {}, [
+            el('thead', {}, [el('tr', {}, ['Site', ''].map((h) => el('th', { text: h })))]),
+            tbody,
+          ]),
+        ])
+      : el('div', { class: 'panel' }, [el('div', { class: 'empty-note', text: 'No sites have been blocklisted yet.' })]),
   ]));
 }
 
