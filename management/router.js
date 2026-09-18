@@ -1,19 +1,55 @@
 'use strict';
 const express = require('express');
 const gus = require('./gusClient');
-const { requireAuth, requireManage } = require('./auth');
+const { requireAuth, requireManage, canManage } = require('./auth');
 const configStore = require('./stores/configStore');
 const groupsStore = require('./stores/groupsStore');
 const fingerprintsStore = require('./stores/fingerprintsStore');
 const overviewStore = require('./stores/overviewStore');
 
-const KNOWN_ROLES = new Set(['owner', 'admin', 'moderator']);
+function gusBaseUrl() {
+  return (process.env.GUS_BASE_URL || '').replace(/\/+$/, '');
+}
 
 function managementRouter() {
   const router = express.Router();
   router.use(express.json({ limit: '1mb' }));
 
-  /* ---------------- session (backed by GUS) ---------------- */
+  /* ---------------- session (backed by Passport, formerly GUS) ---------------- */
+
+  // Shared tail for a completed login, whether it cleared on the first
+  // call or after an MFA challenge — establishes our own session from
+  // Passport's token/profile and responds the same shape either way.
+  function establishSession(req, res, data) {
+    req.session.gusToken = data.token;
+    req.session.user = data.user;
+    req.session.validatedAt = Date.now();
+    delete req.session.pendingMfaTicket;
+    res.json({
+      profile: data.user,
+      requirePasswordChange: data.status === 'good_change_pw',
+      canManage: canManage(data.user.role),
+      gusBaseUrl: gusBaseUrl(),
+    });
+  }
+
+  // Statuses shared between /login and the /login/mfa tail — a blocked
+  // or disabled account can surface at either point.
+  function handleCommonFailure(res, data, httpStatus) {
+    if (data.status === 'rate_limited') {
+      res.set('Retry-After', String(data.retryAfterSeconds || 30));
+      res.status(429).json({ error: 'Too many attempts. Try again shortly.' });
+      return true;
+    }
+    if (data.status === 'bad') { res.status(401).json({ error: 'Incorrect username or password.' }); return true; }
+    if (data.status === 'disabled') { res.status(403).json({ error: 'This account has been disabled.' }); return true; }
+    if (data.status === 'good-no-access') {
+      res.status(403).json({ error: 'This account has been blocked from ProxyStop. Contact a system administrator.' });
+      return true;
+    }
+    if (data.status === 'invalid_request') { res.status(401).json({ error: data.error || 'That code is incorrect or has expired.' }); return true; }
+    return false;
+  }
 
   router.post('/session/login', async (req, res) => {
     const { username, password } = req.body || {};
@@ -30,33 +66,53 @@ function managementRouter() {
 
     const { data, httpStatus } = result;
     if (data.status === 'invalid_app') {
-      return res.status(500).json({ error: 'This server is not registered with GUS. Check GUS_APP_ID / GUS_APP_SECRET.' });
+      return res.status(500).json({ error: 'This server is not registered with Passport. Check GUS_APP_ID / GUS_APP_SECRET.' });
     }
-    if (data.status === 'rate_limited') {
-      res.set('Retry-After', String(data.retryAfterSeconds || 30));
-      return res.status(429).json({ error: 'Too many attempts. Try again shortly.' });
+    if (handleCommonFailure(res, data, httpStatus)) return;
+    if (data.status === 'good_mfa_required') {
+      req.session.pendingMfaTicket = data.mfaTicket;
+      return res.json({ mfaRequired: true });
     }
-    if (data.status === 'bad') return res.status(401).json({ error: 'Incorrect username or password.' });
-    if (data.status === 'disabled') return res.status(403).json({ error: 'This account has been disabled.' });
     if (data.status !== 'good' && data.status !== 'good_change_pw') {
       return res.status(httpStatus || 502).json({ error: 'Unexpected response from the authentication server.' });
     }
-    if (!KNOWN_ROLES.has(data.user.role)) {
-      return res.status(403).json({ error: 'Your GUS account role is not recognized by this application.' });
+
+    establishSession(req, res, data);
+  });
+
+  // Completes a good_mfa_required challenge. Dormant until a sysadmin
+  // opts ProxyStop into MFA challenges on the Passport side — see
+  // gusClient.js's loginMfa.
+  router.post('/session/login/mfa', async (req, res) => {
+    const { code } = req.body || {};
+    const mfaTicket = req.session && req.session.pendingMfaTicket;
+    if (!mfaTicket) return res.status(400).json({ error: 'No sign-in is waiting for a code — start over.' });
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'A verification code is required.' });
     }
 
-    req.session.gusToken = data.token;
-    req.session.user = data.user;
-    req.session.validatedAt = Date.now();
-    res.json({ profile: data.user, requirePasswordChange: data.status === 'good_change_pw', gusBaseUrl: (process.env.GUS_BASE_URL || '').replace(/\/+$/, '') });
+    let result;
+    try {
+      result = await gus.loginMfa(mfaTicket, code);
+    } catch (err) {
+      return res.status(502).json({ error: err.message });
+    }
+
+    const { data, httpStatus } = result;
+    if (handleCommonFailure(res, data, httpStatus)) return;
+    if (data.status !== 'good' && data.status !== 'good_change_pw') {
+      return res.status(httpStatus || 502).json({ error: 'Unexpected response from the authentication server.' });
+    }
+
+    establishSession(req, res, data);
   });
 
   router.get('/session', requireAuth(), (req, res) => {
     res.json({
       profile: req.session.user,
       requirePasswordChange: !!req.session.user.mustChangePassword,
-      canManage: ['owner', 'admin'].includes(req.session.user.role),
-      gusBaseUrl: (process.env.GUS_BASE_URL || '').replace(/\/+$/, ''),
+      canManage: canManage(req.session.user.role),
+      gusBaseUrl: gusBaseUrl(),
     });
   });
 
@@ -74,6 +130,11 @@ function managementRouter() {
     if (data.status !== 'ok') {
       return res.status(httpStatus && httpStatus !== 200 ? httpStatus : 400).json({ error: data.error || 'Could not change password.' });
     }
+    // A successful change revokes every token this account holds, across
+    // every app — including the one this very request used — and issues a
+    // fresh one. Losing this line means the next request 401s the admin
+    // right after they change their password.
+    req.session.gusToken = data.token;
     req.session.user = data.user;
     res.json({ ok: true, profile: data.user });
   });

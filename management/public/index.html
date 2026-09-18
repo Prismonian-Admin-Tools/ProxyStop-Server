@@ -10,8 +10,11 @@
     --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --radius: 10px;
   }
-  /* ---- theme tokens, matched to GUS (Global Admin Account System) so any
-     app behind the same login feels like one product family. ---- */
+  /* ---- theme tokens, matched to Passport (formerly GUS) so any app
+     behind the same login feels like one product family. Passport's own
+     bare-html default moved to blueSharp; ProxyStop keeps ember as ITS
+     fallback for the brief pre-login instant, since every signed-in view
+     immediately applies the admin's real profile.theme anyway. ---- */
   html, [data-theme="ember"] {
     --bg: #0b0e11; --bg-alt: #12161b; --surface: #12161b; --surface-2: #181d24;
     --border: #252b34; --border-soft: #1c212a;
@@ -39,6 +42,29 @@
     --text: #16110c; --text-dim: #4c443a; --text-faint: #756a5c;
     --accent: #d4661f; --accent-dim: #b4551a; --accent-glow: rgba(212,102,31,0.16);
     --green: #327140; --red: #b33a32; --yellow: #93690a; --blue: #285d87;
+  }
+  [data-theme="purple"] {
+    --bg: #120a1c; --bg-alt: #1c1030; --surface: #1c1030; --surface-2: #241541;
+    --border: #7a5aad; --border-soft: #4a3570;
+    --text: #f3eefc; --text-dim: #c3b0dd; --text-faint: #8a76ab;
+    --accent: #b478f0; --accent-dim: #9355d1; --accent-glow: rgba(180,120,240,0.22);
+    --green: #7fdcb8; --red: #f07871; --yellow: #eec35c; --blue: #83b8e6;
+  }
+  /* ---- the "sharp" family: pure black/white, maximum border-vs-surface
+     contrast, for anyone who wants edges over ambience. ---- */
+  [data-theme="blueSharp"] {
+    --bg: #000000; --bg-alt: #0a0a0a; --surface: #000000; --surface-2: #111111;
+    --border: #ffffff; --border-soft: #666666;
+    --text: #ffffff; --text-dim: #cccccc; --text-faint: #999999;
+    --accent: #00e5ff; --accent-dim: #00b8cc; --accent-glow: rgba(0,229,255,0.25);
+    --green: #00ff85; --red: #ff3b3b; --yellow: #ffe135; --blue: #00e5ff;
+  }
+  [data-theme="purpleSharp"] {
+    --bg: #000000; --bg-alt: #0a0a0a; --surface: #000000; --surface-2: #111111;
+    --border: #ffffff; --border-soft: #666666;
+    --text: #ffffff; --text-dim: #cccccc; --text-faint: #999999;
+    --accent: #b45cff; --accent-dim: #8e3fd1; --accent-glow: rgba(180,92,255,0.25);
+    --green: #00ff85; --red: #ff3b3b; --yellow: #ffe135; --blue: #b45cff;
   }
 
   * { box-sizing: border-box; }
@@ -194,8 +220,9 @@ async function api(path, opts = {}) {
   return data;
 }
 
+const THEMES = ['ember', 'ocean', 'forest', 'light', 'purple', 'blueSharp', 'purpleSharp'];
 function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme && ['ember', 'ocean', 'forest', 'light'].includes(theme) ? theme : 'ember');
+  document.documentElement.setAttribute('data-theme', theme && THEMES.includes(theme) ? theme : 'ember');
 }
 
 function toast(msg, kind) {
@@ -237,17 +264,24 @@ function brandmark() {
   return el('div', { class: 'brandmark', html: logo + '<span class="word">Proxy<span>Stop</span></span>' });
 }
 
+/* ---------------- session ---------------- */
+// Shared by boot() (GET /session) and a completed login (POST /session/login
+// or /session/login/mfa) — all three respond the same {profile,
+// requirePasswordChange, canManage, gusBaseUrl} shape.
+function applySession(result) {
+  state.profile = result.profile;
+  state.canManage = !!result.canManage;
+  state.gusBaseUrl = result.gusBaseUrl || '';
+  applyTheme(result.profile.theme);
+  if (result.requirePasswordChange) return renderForceChange();
+  render();
+}
+
 /* ---------------- boot ---------------- */
 async function boot() {
   applyTheme('ember');
   try {
-    const { profile, requirePasswordChange, canManage, gusBaseUrl } = await api('/session');
-    state.profile = profile;
-    state.canManage = canManage;
-    state.gusBaseUrl = gusBaseUrl || '';
-    applyTheme(profile.theme);
-    if (requirePasswordChange) return renderForceChange();
-    render();
+    applySession(await api('/session'));
   } catch (e) {
     renderLogin();
   }
@@ -266,15 +300,11 @@ function renderLogin(message) {
     errEl.textContent = '';
     submitBtn.disabled = true;
     try {
-      const { profile, requirePasswordChange, canManage, gusBaseUrl } = await api('/session/login', {
+      const result = await api('/session/login', {
         method: 'POST', body: { username: username.value, password: password.value },
       });
-      state.profile = profile;
-      state.canManage = canManage !== undefined ? canManage : ['owner', 'admin'].includes(profile.role);
-      state.gusBaseUrl = gusBaseUrl || '';
-      applyTheme(profile.theme);
-      if (requirePasswordChange) return renderForceChange();
-      render();
+      if (result.mfaRequired) return renderMfaChallenge();
+      applySession(result);
     } catch (e) { errEl.textContent = e.message; }
     finally { submitBtn.disabled = false; }
   }
@@ -291,6 +321,40 @@ function renderLogin(message) {
   password.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   app.appendChild(el('div', { class: 'center-screen' }, [form]));
   username.focus();
+}
+
+/* ---------------- MFA challenge ----------------
+ * Dormant until a sysadmin opts ProxyStop into MFA challenges from
+ * Passport's Apps tab — /session/login only ever asks for this when
+ * Passport itself returned good_mfa_required. */
+function renderMfaChallenge() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const errEl = el('div', { class: 'err' });
+  const code = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', placeholder: '123456' });
+  const submitBtn = el('button', { class: 'btn-primary btn-block', text: 'Verify' });
+
+  async function submit() {
+    errEl.textContent = '';
+    submitBtn.disabled = true;
+    try {
+      applySession(await api('/session/login/mfa', { method: 'POST', body: { code: code.value } }));
+    } catch (e) { errEl.textContent = e.message; }
+    finally { submitBtn.disabled = false; }
+  }
+  submitBtn.addEventListener('click', submit);
+  code.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+
+  const form = el('div', { class: 'card' }, [
+    brandmark(),
+    el('div', { class: 'sub', text: 'Enter the code from your authenticator app, or a backup code.' }),
+    el('label', { text: 'Verification code' }), code,
+    errEl,
+    submitBtn,
+    el('button', { class: 'btn-ghost btn-block', text: 'Back to sign in', style: 'margin-top:8px', onclick: () => renderLogin() }),
+  ]);
+  app.appendChild(el('div', { class: 'center-screen' }, [form]));
+  code.focus();
 }
 
 /* ---------------- forced password change ---------------- */
