@@ -18,10 +18,23 @@ const MANAGE_RANKS = new Set([
   'elevatedStaff', // ElevatedAdmins — replaces the old "admin"
   'owner', 'admin', // pre-rank role names, kept for compatibility
 ]);
+// Configuration is more sensitive than the rest of the manage-capable
+// surface (it edits config.json directly, including the switch that can
+// lock everyone out of /manage), so it's scoped tighter — Provider and
+// Sysadmin only, not ElevatedAdmins.
+const CONFIGURE_RANKS = new Set([
+  'trustedInstaller', // Provider
+  'systemAdministrator', // Sysadmin — replaces the old "owner"
+  'owner', // pre-rank role name, kept for compatibility
+]);
 const REVALIDATE_INTERVAL_MS = 60_000;
 
 function canManage(rank) {
   return MANAGE_RANKS.has(rank);
+}
+
+function canConfigure(rank) {
+  return CONFIGURE_RANKS.has(rank);
 }
 
 /**
@@ -60,4 +73,11 @@ function requireManage(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireManage, canManage, MANAGE_RANKS };
+function requireConfigure(req, res, next) {
+  if (!canConfigure(req.session.user.role)) {
+    return res.status(403).json({ error: 'Only Providers and Sysadmins may access Configuration.' });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireManage, requireConfigure, canManage, canConfigure, MANAGE_RANKS, CONFIGURE_RANKS };

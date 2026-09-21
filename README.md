@@ -14,24 +14,37 @@ A browser-based admin console lives at `/manage`, styled to match
 ProxyStop accounts. Env vars and code still say `GUS_*`/`gus` for
 backward compatibility; it's the same service under its new name.
 
-- **Dashboard** — fingerprint/blocklist counts, server status, and recently flagged sites.
+- **Dashboard** — fingerprint/blocklist counts and recently flagged sites.
 - **Fingerprints** — list, inspect, delete, and create new fingerprints by scraping a source URL.
-- **Configuration** (manage-capable ranks only) — edit `config.json`'s server, fingerprint-detection, reports, scraper, and management-server settings.
+- **Blocklist** — sites auto-blocklisted after a confirmed proxy match.
+- **Whitelist** — sites exempted from fingerprint detection and blocklisting entirely, for known-good sites that would otherwise false-positive.
+- **Configuration** (Provider/Sysadmin only) — edit `config.json`'s server, fingerprint-detection, reports, scraper, and management-server settings.
+
+The console signs itself out after 10 minutes of inactivity.
 
 Passport replaced its three fixed roles with **ranks** — four built-ins,
-plus any custom rank a sysadmin creates. ProxyStop maps them to two
-buckets of its own:
+plus any custom rank a sysadmin creates. ProxyStop maps them to its own
+access tiers:
 
-| Rank | Can manage? |
-|---|---|
-| `trustedInstaller` (Provider), `systemAdministrator` (Sysadmin), `elevatedStaff` (ElevatedAdmins) | Yes — full access above |
-| `staff` (StaffUsers), any custom rank ProxyStop doesn't recognize | No — read-only everywhere except Configuration, which is hidden |
+| Rank | Can manage? | Can configure? |
+|---|---|---|
+| `trustedInstaller` (Provider), `systemAdministrator` (Sysadmin) | Yes | Yes |
+| `elevatedStaff` (ElevatedAdmins) | Yes | No |
+| `staff` (StaffUsers), any custom rank ProxyStop doesn't recognize | No — read-only everywhere except Configuration, which is hidden | No |
+
+"Manage" covers editing the blocklist/whitelist and creating or deleting
+fingerprints. "Configure" is narrower — it's the Configuration page,
+which edits `config.json` directly (including the switch that can lock
+everyone out of `/manage`), so it's restricted to Provider and Sysadmin
+only.
 
 An unrecognized rank name is never rejected at login — Passport already
 vouches for the account — it just defaults to read-only, so a sysadmin
 creating a custom rank later can't accidentally lock people out of
 signing in. The pre-rank names (`owner`/`admin`) are still accepted too,
-for accounts on an older Passport deployment.
+for accounts on an older Passport deployment (`owner` counts as
+Sysadmin-equivalent, including for Configuration access; `admin` counts
+as ElevatedAdmins-equivalent).
 
 ProxyStop also supports Passport's MFA challenge step
 (`good_mfa_required` → a code-entry screen → `/api/v1/login/mfa`) and

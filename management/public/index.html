@@ -54,15 +54,22 @@
   /* ---- the "sharp" family: pure black/white, maximum border-vs-surface
      contrast, for anyone who wants edges over ambience. blueSharp is the
      app default (bound to bare html), matching Passport's own default. ---- */
+  /* --surface used to sit at the exact same value as --bg here, so a
+     .panel/.stat-card (background: var(--surface)) was pixel-identical to
+     the page behind it — distinguishable only by a 1px border that some
+     laptop panels don't render crisply, making the whole page look like
+     an empty black slab. Brightened a step above --bg (still short of
+     --surface-2) so panels read as raised surfaces even when that border
+     doesn't show. */
   html, [data-theme="blueSharp"] {
-    --bg: #000000; --bg-alt: #0a0a0a; --surface: #000000; --surface-2: #111111;
+    --bg: #000000; --bg-alt: #0a0a0a; --surface: #131313; --surface-2: #1c1c1c;
     --border: #ffffff; --border-soft: #666666;
     --text: #ffffff; --text-dim: #cccccc; --text-faint: #999999;
     --accent: #00e5ff; --accent-dim: #00b8cc; --accent-glow: rgba(0,229,255,0.25);
     --green: #00ff85; --red: #ff3b3b; --yellow: #ffe135; --blue: #00e5ff;
   }
   [data-theme="purpleSharp"] {
-    --bg: #000000; --bg-alt: #0a0a0a; --surface: #000000; --surface-2: #111111;
+    --bg: #000000; --bg-alt: #0a0a0a; --surface: #131313; --surface-2: #1c1c1c;
     --border: #ffffff; --border-soft: #666666;
     --text: #ffffff; --text-dim: #cccccc; --text-faint: #999999;
     --accent: #b45cff; --accent-dim: #8e3fd1; --accent-glow: rgba(180,92,255,0.25);
@@ -265,9 +272,10 @@ const ICONS = {
   clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
   globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 4 6 4 9s-1.5 6.5-4 9c-2.5-2.5-4-6-4-9s1.5-6.5 4-9z"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+  whitelist: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
 };
 
-const state = { profile: null, view: 'dashboard', canManage: false, gusBaseUrl: '' };
+const state = { profile: null, view: 'dashboard', canManage: false, canConfigure: false, gusBaseUrl: '' };
 
 async function api(path, opts = {}) {
   const res = await fetch('/manage/api' + path, {
@@ -361,6 +369,7 @@ function brandmark() {
 function applySession(result) {
   state.profile = result.profile;
   state.canManage = !!result.canManage;
+  state.canConfigure = !!result.canConfigure;
   state.gusBaseUrl = result.gusBaseUrl || '';
   applyTheme(result.profile.theme);
   if (result.requirePasswordChange) return renderForceChange();
@@ -477,11 +486,12 @@ function renderForceChange() {
 
 /* ---------------- shell ---------------- */
 function render() {
+  startAutoLogoff();
   const app = document.getElementById('app');
   app.innerHTML = '';
 
-  const tabs = [['dashboard', 'Dashboard', 'dashboard'], ['fingerprints', 'Fingerprints', 'fingerprints'], ['blocklist', 'Blocklist', 'blocklist']];
-  if (state.canManage) tabs.push(['config', 'Configuration', 'settings']);
+  const tabs = [['dashboard', 'Dashboard', 'dashboard'], ['fingerprints', 'Fingerprints', 'fingerprints'], ['blocklist', 'Blocklist', 'blocklist'], ['whitelist', 'Whitelist', 'whitelist']];
+  if (state.canConfigure) tabs.push(['config', 'Configuration', 'settings']);
 
   const navEl = el('nav', {}, [
     el('div', { class: 'navlabel', text: 'Navigate' }),
@@ -504,18 +514,65 @@ function render() {
   ]);
 
   const content = el('section', { class: 'content', id: 'content' });
-  app.appendChild(el('div', {}, [header, el('main', {}, [navEl, content])]));
+  // header and main go straight onto #app (not wrapped in an extra div) —
+  // #app is the flex column that stretches `main` to fill the viewport
+  // (see main{flex:1}); a wrapping div here isn't a flex item of #app, so
+  // main falls back to shrinking to its own content height and nav's
+  // background stops exactly at the bottom of whatever panel is showing
+  // instead of running the full height of the page.
+  app.appendChild(header);
+  app.appendChild(el('main', {}, [navEl, content]));
 
   if (state.view === 'dashboard') renderDashboard(content);
   if (state.view === 'fingerprints') renderFingerprints(content);
   if (state.view === 'blocklist') renderBlocklist(content);
-  if (state.view === 'config') renderConfig(content);
+  if (state.view === 'whitelist') renderWhitelist(content);
+  if (state.view === 'config' && state.canConfigure) renderConfig(content);
 }
 
 async function logout() {
+  stopAutoLogoff();
   await api('/session/logout', { method: 'POST' });
   state.profile = null;
   renderLogin();
+}
+
+/* ---------------- automatic logoff ----------------
+ * Signs the session out after sitting idle for 10 minutes, same pattern
+ * as Passport's own admin console. */
+const AUTO_LOGOFF_IDLE_MS = 10 * 60 * 1000;
+const AUTO_LOGOFF_HEARTBEAT_MS = 15 * 1000;
+const AUTO_LOGOFF_ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'];
+let autoLogoff = null; // { timer, lastActivityAt } while signed in, else null
+
+function markAutoLogoffActivity() {
+  if (autoLogoff) autoLogoff.lastActivityAt = Date.now();
+}
+
+async function triggerAutoLogoff(message) {
+  stopAutoLogoff();
+  try { await api('/session/logout', { method: 'POST' }); } catch (e) { /* best effort — we're leaving the app either way */ }
+  state.profile = null;
+  renderLogin();
+  toast(message, 'ok');
+}
+
+function startAutoLogoff() {
+  if (autoLogoff) return;
+  autoLogoff = { lastActivityAt: Date.now(), timer: null };
+  AUTO_LOGOFF_ACTIVITY_EVENTS.forEach((evt) => window.addEventListener(evt, markAutoLogoffActivity, { passive: true }));
+  autoLogoff.timer = setInterval(() => {
+    if (Date.now() - autoLogoff.lastActivityAt >= AUTO_LOGOFF_IDLE_MS) {
+      triggerAutoLogoff('Signed out automatically after 10 minutes of inactivity.');
+    }
+  }, AUTO_LOGOFF_HEARTBEAT_MS);
+}
+
+function stopAutoLogoff() {
+  if (!autoLogoff) return;
+  clearInterval(autoLogoff.timer);
+  AUTO_LOGOFF_ACTIVITY_EVENTS.forEach((evt) => window.removeEventListener(evt, markAutoLogoffActivity));
+  autoLogoff = null;
 }
 
 /* ---------------- dashboard ---------------- */
@@ -542,15 +599,6 @@ async function renderDashboard(content) {
     el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.blocklist.count }), el('div', { class: 'label', text: 'Blocklisted sites' })]),
     el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: overview.reports.total }), el('div', { class: 'label', text: 'Flagged sites' })]),
     el('div', { class: 'stat-card' }, [el('div', { class: 'num', text: uptimeH + 'h ' + uptimeM + 'm' }), el('div', { class: 'label', text: 'Server uptime' })]),
-  ]));
-
-  content.appendChild(el('div', { class: 'panel' }, [
-    el('h3', {}, [icon('globe'), el('span', { text: 'Server status' })]),
-    el('div', { class: 'detail-row', style: 'display:flex;gap:24px;flex-wrap:wrap;font-size:13px' }, [
-      el('div', {}, [el('div', { class: 'muted', text: 'Listening on' }), el('div', { class: 'mono', text: overview.server.host + ':' + overview.server.port })]),
-      el('div', {}, [el('div', { class: 'muted', text: 'Minimum confidence' }), el('div', { class: 'mono', text: overview.fingerprints.minimumConfidence + '%' })]),
-      el('div', {}, [el('div', { class: 'muted', text: 'Management server' }), el('span', { class: 'badge ' + (overview.server.managementServerEnabled ? 'ok' : 'off'), text: overview.server.managementServerEnabled ? 'enabled' : 'disabled' })]),
-    ]),
   ]));
 
   content.appendChild(el('div', { class: 'panel' }, [
@@ -606,6 +654,73 @@ async function renderBlocklist(content) {
           ])),
         ])
       : el('div', { class: 'panel' }, [el('div', { class: 'empty-note', text: 'No sites have been blocklisted yet.' })]),
+  ]));
+}
+
+/* ---------------- whitelist ---------------- */
+async function renderWhitelist(content) {
+  let sites;
+  try { sites = await api('/whitelist'); }
+  catch (e) { content.innerHTML = ''; content.appendChild(el('div', { class: 'err', text: e.message })); return; }
+  content.innerHTML = '';
+
+  async function removeSite(site) {
+    if (!confirm('Remove "' + site + '" from the whitelist?')) return;
+    try {
+      await api('/whitelist/' + encodeURIComponent(site), { method: 'DELETE' });
+      toast('Removed from whitelist', 'ok');
+      renderWhitelist(content);
+    } catch (e) { toast(e.message, 'err'); }
+  }
+
+  function makeRow(site) {
+    return el('tr', {}, [
+      el('td', { class: 'mono', text: site }),
+      el('td', { class: 'row-actions' }, [
+        state.canManage ? el('button', { class: 'btn-danger btn-sm', text: 'Remove', onclick: () => removeSite(site) }) : null,
+      ]),
+    ]);
+  }
+
+  const search = el('input', { type: 'text', placeholder: 'Search whitelist…' });
+  const tbody = el('tbody', {}, sites.map(makeRow));
+  search.addEventListener('input', () => {
+    const q = search.value.toLowerCase();
+    tbody.innerHTML = '';
+    sites.filter((s) => s.toLowerCase().includes(q)).forEach((s) => tbody.appendChild(makeRow(s)));
+  });
+
+  const addInput = el('input', { type: 'text', placeholder: 'example.com' });
+  const addBtn = el('button', { class: 'btn-primary btn-sm', text: 'Add' });
+  async function addSite() {
+    const site = addInput.value.trim();
+    if (!site) return;
+    addBtn.disabled = true;
+    try {
+      await api('/whitelist', { method: 'POST', body: { site } });
+      toast('Added to whitelist', 'ok');
+      renderWhitelist(content);
+    } catch (e) { toast(e.message, 'err'); addBtn.disabled = false; }
+  }
+  addBtn.addEventListener('click', addSite);
+  addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSite(); });
+
+  content.appendChild(el('div', {}, [
+    el('h2', {}, [icon('whitelist'), el('span', { text: 'Whitelist' })]),
+    el('div', { class: 'pagesub', text: sites.length + ' site' + (sites.length === 1 ? '' : 's') + ' exempted from proxy detection.' }),
+    el('div', { class: 'hint', style: 'margin-bottom:16px', text: 'Requests matching a whitelisted entry exactly are never checked against fingerprints or blocklisted — use it for known-good sites that would otherwise trigger a false positive.' }),
+    state.canManage
+      ? el('div', { class: 'toolbar' }, [el('div', { class: 'field-row', style: 'grid-template-columns:1fr auto' }, [addInput, addBtn])])
+      : null,
+    sites.length
+      ? el('div', {}, [
+          el('div', { class: 'toolbar' }, [search]),
+          tableWrap(el('table', {}, [
+            el('thead', {}, [el('tr', {}, tableHeaders(['Site', '']))]),
+            tbody,
+          ])),
+        ])
+      : el('div', { class: 'panel' }, [el('div', { class: 'empty-note', text: 'No sites have been whitelisted yet.' })]),
   ]));
 }
 
