@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const proc = require('./scripts/processor.js');
 const configStore = require('./management/stores/configStore');
 const blocklistStore = require('./management/stores/blocklistStore');
+const whitelistStore = require('./management/stores/whitelistStore');
 const { managementRouter } = require('./management/router');
 
 const publicDirectory = path.join(__dirname, 'public');
@@ -28,6 +29,9 @@ app.get('/health', (req, res) => res.send('ok'));
 // Request format: proxystop.example.com/api/student?website=example.com?group=groupname
 app.get('/api/*', async (req, res) => {
   const requestedUrl = req.query.url;
+  if (whitelistStore.has(requestedUrl)) {
+    return res.type('text/plain').send('false');
+  }
   const isMatch = await proc.comparison(requestedUrl);
 
   if (isMatch) {

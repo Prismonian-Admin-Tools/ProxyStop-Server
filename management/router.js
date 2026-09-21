@@ -1,11 +1,12 @@
 'use strict';
 const express = require('express');
 const gus = require('./gusClient');
-const { requireAuth, requireManage, canManage } = require('./auth');
+const { requireAuth, requireManage, requireConfigure, canManage, canConfigure } = require('./auth');
 const configStore = require('./stores/configStore');
 const fingerprintsStore = require('./stores/fingerprintsStore');
 const overviewStore = require('./stores/overviewStore');
 const blocklistStore = require('./stores/blocklistStore');
+const whitelistStore = require('./stores/whitelistStore');
 
 function gusBaseUrl() {
   return (process.env.GUS_BASE_URL || '').replace(/\/+$/, '');
@@ -29,6 +30,7 @@ function managementRouter() {
       profile: data.user,
       requirePasswordChange: data.status === 'good_change_pw',
       canManage: canManage(data.user.role),
+      canConfigure: canConfigure(data.user.role),
       gusBaseUrl: gusBaseUrl(),
     });
   }
@@ -112,6 +114,7 @@ function managementRouter() {
       profile: req.session.user,
       requirePasswordChange: !!req.session.user.mustChangePassword,
       canManage: canManage(req.session.user.role),
+      canConfigure: canConfigure(req.session.user.role),
       gusBaseUrl: gusBaseUrl(),
     });
   });
@@ -157,6 +160,20 @@ function managementRouter() {
     catch (err) { res.status(400).json({ error: err.message }); }
   });
 
+  /* ---- whitelist ---- */
+  router.get('/whitelist', async (req, res) => {
+    try { res.json(await whitelistStore.list()); }
+    catch (err) { res.status(500).json({ error: err.message }); }
+  });
+  router.post('/whitelist', requireManage, async (req, res) => {
+    try { await whitelistStore.add(req.body?.site); res.json({ ok: true }); }
+    catch (err) { res.status(400).json({ error: err.message }); }
+  });
+  router.delete('/whitelist/:site', requireManage, async (req, res) => {
+    try { await whitelistStore.remove(req.params.site); res.json({ ok: true }); }
+    catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
   /* ---- fingerprints ---- */
   router.get('/fingerprints', async (req, res) => {
     try { res.json(await fingerprintsStore.list()); }
@@ -176,8 +193,8 @@ function managementRouter() {
   });
 
   /* ---- configuration ---- */
-  router.get('/config', requireManage, (req, res) => res.json(configStore.getEditable()));
-  router.put('/config', requireManage, async (req, res) => {
+  router.get('/config', requireConfigure, (req, res) => res.json(configStore.getEditable()));
+  router.put('/config', requireConfigure, async (req, res) => {
     try { res.json(await configStore.update(req.body || {})); }
     catch (err) { res.status(400).json({ error: err.message }); }
   });
